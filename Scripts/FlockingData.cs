@@ -25,6 +25,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
     private struct GrassData {
         public Vector3 position;
         public Vector3 normal;
+        public float scale;
         public float rotation;
     }
 
@@ -46,6 +47,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
     private void OnEnable() {
         if (instance == null || instance == this) {
             instance = this;
+            OnAfterDeserialize();
             RegenerateMatricies();
         } else {
             if (Application.isPlaying) {
@@ -91,7 +93,17 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         Render();
     }
 
-    public static void AddPoint(Vector3 point, Vector3 normal, float rotation) {
+    public static void ScalePoint(Vector3 point, float scaleMultiplier) {
+        var quantizedPoint = BoundedRange.Quantize(point, instance.boundedRanges);
+        if (!instance.quantizedPoints.ContainsKey(quantizedPoint)) {
+            return;
+        }
+        var data = instance.quantizedPoints[quantizedPoint];
+        data.scale *= scaleMultiplier;
+        instance.quantizedPoints[quantizedPoint] = data;
+    }
+
+    public static void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, float rotation) {
         if (point.x <= instance.boundedRanges[0].GetMinValue() ||
             point.y <= instance.boundedRanges[1].GetMinValue() ||
             point.z <= instance.boundedRanges[2].GetMinValue() ||
@@ -104,6 +116,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         var quantizedPoint = BoundedRange.Quantize(point, instance.boundedRanges);
         instance.quantizedPoints[quantizedPoint] = new GrassData {
             position = BoundedRange.Dequantize(quantizedPoint, instance.boundedRanges),
+            scale = scale.magnitude,
             normal = normal,
             rotation = rotation,
         };
@@ -183,7 +196,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         Vector3 center = Vector3.Lerp(maxBounds,minBounds, 0.5f);
         int i = 0;
         foreach (var data in instance.quantizedPoints) {
-            cachedMatricies[i] = Matrix4x4.TRS(data.Value.position-center, Quaternion.AngleAxis(data.Value.rotation,Vector3.up)*Quaternion.FromToRotation(Vector3.forward, data.Value.normal.normalized), Vector3.one);
+            cachedMatricies[i] = Matrix4x4.TRS(data.Value.position-center, Quaternion.FromToRotation(Vector3.forward, data.Value.normal.normalized)*Quaternion.AngleAxis(data.Value.rotation,Vector3.forward), data.Value.scale == 0f ? Vector3.one : Vector3.one*data.Value.scale);
             i++;
         }
         modelMatricies.SetData(cachedMatricies);
@@ -201,7 +214,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
             reflectionProbeUsage = ReflectionProbeUsage.BlendProbes,
             lightProbeProxyVolume = proxy,
         };
-        // TODO: Sending waaaay too much to the GPU, probably should chunk this up!
+        // TODO: Sending waaaay too much to the GPU, probably should chunk up the grid
         renderParams.matProps.SetBuffer("_GrassMat", modelMatricies);
     }
 

@@ -14,6 +14,8 @@ class FlockingEditorTool : EditorTool {
     private float toolRadius = 0.5f;
     [SerializeField, Range(0,16)]
     private int toolSubdivAmount = 1;
+    [SerializeField]
+    private float toolFoliageStartScale = 1f;
 
     private int controlID;
     private RaycastHit[] cachedHits;
@@ -23,13 +25,25 @@ class FlockingEditorTool : EditorTool {
     private List<int> cachedTriangles;
     private List<Vector3> cachedVertices;
 
+    private class FlockOperation {
+    }
+    private class FlockAddOperation : FlockOperation{
+        public float startScale;
+    }
+    private class FlockRemoveOperation : FlockOperation {
+    }
+    private class FlockScaleOperation : FlockOperation {
+        public float scaleMultiplier;
+    }
+
     private struct FlockData {
         public Vector3 position;
         public Vector3 normal;
         public Collider hitCollider;
         public float radius;
         public int divisor;
-        public bool adding;
+        public bool backfaceCulling;
+        public FlockOperation operation;
     }
     
     void OnEnable() {
@@ -81,11 +95,15 @@ class FlockingEditorTool : EditorTool {
         GUI.DragWindow(new Rect(0, 0, 10000, 20));
         EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(toolRadius)), true);
         EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(toolSubdivAmount)), true);
+        EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(toolFoliageStartScale)), true);
         serializedObject.ApplyModifiedProperties();
     }
 
     private void TriangleToGrid(Vector3 v0, Vector3 v1, Vector3 v2, FlockData flockData) {
         Vector3 normal = Vector3.Cross((v1-v0).normalized, (v2-v0).normalized).normalized;
+        if (flockData.backfaceCulling && Vector3.Dot(normal, flockData.normal) <= 0.1f) {
+            return;
+        }
         
         // Get the bounds
         Vector3Int v0i = Vector3Int.FloorToInt(v0*flockData.divisor);
@@ -125,10 +143,12 @@ class FlockingEditorTool : EditorTool {
                         continue;
                     }
 
-                    if (flockData.adding) {
-                        FlockingData.AddPoint(testPosition, normal, Random.Range(0f,360f));
-                    } else {
+                    if (flockData.operation is FlockAddOperation add) {
+                        FlockingData.AddPoint(testPosition, normal, Vector3.one*add.startScale, Random.Range(0f,360f));
+                    } else if (flockData.operation is FlockRemoveOperation remove) {
                         FlockingData.RemovePoint(testPosition);
+                    } else if (flockData.operation is FlockScaleOperation scale) {
+                        FlockingData.ScalePoint(testPosition, scale.scaleMultiplier);
                     }
                 }
             }
@@ -175,11 +195,6 @@ class FlockingEditorTool : EditorTool {
                 if (Event.current.button == 0) {
                     GUIUtility.hotControl = controlID;
                     FlockingData.StartChange();
-                    if (flockData != null) {
-                        var data = flockData.Value;
-                        data.adding = !Event.current.control;
-                        flockData = data;
-                    }
                     Event.current.Use();
                 }
                 break;
@@ -209,21 +224,32 @@ class FlockingEditorTool : EditorTool {
                     return;
                 }
                 var hitInfo = cachedHits[minHit];
+                FlockOperation operation;
+                if (Event.current.shift) {
+                    operation = new FlockScaleOperation() {
+                        scaleMultiplier = Event.current.control ? 0.99f : 1.01f,
+                    };
+                } else {
+                    if (!Event.current.control) {
+                        operation = new FlockAddOperation() {
+                            startScale = toolFoliageStartScale,
+                        };
+                    } else {
+                        operation = new FlockRemoveOperation();
+                    }
+                }
+
                 flockData = new FlockData {
                     position = hitInfo.point,
                     normal = hitInfo.normal,
                     radius = toolRadius,
                     divisor = 1 << toolSubdivAmount,
-                    adding = flockData?.adding ?? true,
-                    hitCollider = hitInfo.collider
+                    operation = operation,
+                    hitCollider = hitInfo.collider,
+                    backfaceCulling = true,
                 };
                 if (GUIUtility.hotControl == controlID && hitInfo.collider.gameObject.isStatic) {
-                    CalculateIntersections(hitInfo.collider, new FlockData {
-                        position = hitInfo.point,
-                        radius = toolRadius,
-                        divisor = 1<<toolSubdivAmount,
-                        adding = true
-                    });
+                    CalculateIntersections(hitInfo.collider, flockData.Value);
                     FlockingData.RenderIfNeeded();
                 }
                 break;
