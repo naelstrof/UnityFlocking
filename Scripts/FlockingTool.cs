@@ -192,14 +192,14 @@ class FlockingEditorTool : EditorTool {
 
         switch (Event.current.type) {
             case EventType.MouseDown:
-                if (Event.current.button == 0) {
+                if (Event.current.button == 0 && GUIUtility.hotControl != controlID) {
                     GUIUtility.hotControl = controlID;
                     FlockingData.StartChange();
                     Event.current.Use();
                 }
                 break;
             case EventType.MouseUp:
-                if (Event.current.button == 0) {
+                if (Event.current.button == 0 && GUIUtility.hotControl == controlID) {
                     GUIUtility.hotControl = 0;
                     FlockingData.EndChange();
                     Event.current.Use();
@@ -226,8 +226,9 @@ class FlockingEditorTool : EditorTool {
                 var hitInfo = cachedHits[minHit];
                 FlockOperation operation;
                 if (Event.current.shift) {
+                    float delta = Event.current.delta.magnitude;
                     operation = new FlockScaleOperation() {
-                        scaleMultiplier = Event.current.control ? 0.99f : 1.01f,
+                        scaleMultiplier = (Event.current.control ? -delta : delta)*0.001f,
                     };
                 } else {
                     if (!Event.current.control) {
@@ -250,7 +251,7 @@ class FlockingEditorTool : EditorTool {
                 };
                 if (GUIUtility.hotControl == controlID && hitInfo.collider.gameObject.isStatic) {
                     CalculateIntersections(hitInfo.collider, flockData.Value);
-                    FlockingData.RenderIfNeeded();
+                    obj.Repaint();
                 }
                 break;
             case EventType.Repaint:
