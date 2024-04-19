@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using NetStack.Quantization;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 [ExecuteAlways]
-public class FlockingData : MonoBehaviour {
+public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
     [Serializable]
     private class SerializedFlockingData {
         [SerializeField] public List<GrassData> grassDatas;
@@ -28,6 +30,7 @@ public class FlockingData : MonoBehaviour {
 
     private Dictionary<QuantizedVector3, GrassData> quantizedPoints;
     private BoundedRange[] boundedRanges;
+    private Matrix4x4[] cachedMatricies;
     
     private static FlockingData instance;
     private static List<GrassData> cachedPoints;
@@ -37,15 +40,12 @@ public class FlockingData : MonoBehaviour {
     private Mesh currentMesh;
     private GraphicsBuffer modelMatricies;
     private RenderParams renderParams;
+    private static int undoGroup = -1;
+    private MaterialPropertyBlock materialProperties;
     
     private void OnEnable() {
         if (instance == null || instance == this) {
             instance = this;
-            boundedRanges = GetBoundedRanges(serializedData?.grassDatas ?? new List<GrassData>());
-            quantizedPoints ??= new Dictionary<QuantizedVector3, GrassData>();
-            foreach (var data in serializedData?.grassDatas ?? new List<GrassData>()) {
-                quantizedPoints[BoundedRange.Quantize(data.position, boundedRanges)] = data;
-            }
             RegenerateMatricies();
         } else {
             if (Application.isPlaying) {
@@ -54,11 +54,25 @@ public class FlockingData : MonoBehaviour {
                 DestroyImmediate(this);
             }
         }
+#if UNITY_EDITOR
+        Undo.undoRedoEvent += OnUndoRedoEvent;
+#endif
     }
+
+#if UNITY_EDITOR
+    private void OnUndoRedoEvent(in UndoRedoInfo undo) {
+        if (undo.undoName.Contains(nameof(FlockingData))) {
+            OnAfterDeserialize();
+        }
+    }
+#endif
 
     private void OnDisable() {
         modelMatricies?.Release();
         modelMatricies = null;
+#if UNITY_EDITOR
+        Undo.undoRedoEvent -= OnUndoRedoEvent;
+#endif
     }
 
     private void SetBoundRanges(BoundedRange[] newRanges) {
@@ -74,94 +88,121 @@ public class FlockingData : MonoBehaviour {
     }
 
     private void Update() {
-        if (serializedData.grassDatas.Count == 0) {
-            return;
-        }
-        if (renderParams.matProps == null) {
-            return;
-        }
-        renderParams.matProps.SetBuffer("_GrassMat", modelMatricies);
-        Graphics.RenderMeshPrimitives(renderParams, grassMesh, 0, serializedData.grassDatas.Count);
+        Render();
     }
 
     public static void AddPoint(Vector3 point, Vector3 normal, float rotation) {
-        if (instance == null) {
-            instance = new GameObject("Flocking Data", typeof(FlockingData)).GetComponent<FlockingData>();
-        }
         if (point.x <= instance.boundedRanges[0].GetMinValue() ||
             point.y <= instance.boundedRanges[1].GetMinValue() ||
             point.z <= instance.boundedRanges[2].GetMinValue() ||
             point.x >= instance.boundedRanges[0].GetMaxValue() ||
             point.y >= instance.boundedRanges[1].GetMaxValue() ||
             point.z >= instance.boundedRanges[2].GetMaxValue()) {
-            var newRanges = GetBoundedRanges(instance.serializedData.grassDatas, point);
+            var newRanges = GetBoundedRanges(new List<GrassData>(instance.quantizedPoints.Values), point);
             instance.SetBoundRanges(newRanges);
         }
         var quantizedPoint = BoundedRange.Quantize(point, instance.boundedRanges);
         instance.quantizedPoints[quantizedPoint] = new GrassData {
-            position = point,
+            position = BoundedRange.Dequantize(quantizedPoint, instance.boundedRanges),
             normal = normal,
             rotation = rotation,
         };
+    }
+
+    public static void Regenerate() {
         instance.RegenerateMatricies();
     }
 
+    private void Render() {
+        if (serializedData.grassDatas.Count == 0) {
+            return;
+        }
+        if (renderParams.matProps == null) {
+            return;
+        }
+        Graphics.RenderMeshPrimitives(renderParams, grassMesh, 0, quantizedPoints.Count);
+    }
+
+    #if UNITY_EDITOR
+    public static void RenderIfNeeded() {
+        if (instance == null) return;
+        if (instance.grassMesh == null) {
+            return;
+        }
+        instance.Render();
+    }
     public static void StartChange() {
         if (instance == null) {
             instance = new GameObject("Flocking Data", typeof(FlockingData)).GetComponent<FlockingData>();
         }
-        Undo.RecordObject(instance, "Flocking change");
+        if (undoGroup == -1) {
+            Undo.SetCurrentGroupName($"Change {nameof(FlockingData)}");
+            undoGroup = Undo.GetCurrentGroup();
+        } else {
+            throw new Exception("Tried to start change twice! This shouldn't happen.");
+        }
     }
     public static void EndChange() {
-        instance.BeforeSerialize();
+        if (undoGroup == -1) {
+            throw new Exception("Tried to end change without starting it! This shouldn't happen.");
+        }
+        Undo.RecordObject(instance, "Flocking change");
+        instance.ManualSerialization();
         EditorUtility.SetDirty(instance);
+        Undo.CollapseUndoOperations(undoGroup);
+        undoGroup = -1;
+        RenderIfNeeded();
     }
+    #endif
     public static void RemovePoint(Vector3 point) {
         var quantizedPoint = BoundedRange.Quantize(point, instance.boundedRanges);
         if (!instance.quantizedPoints.ContainsKey(quantizedPoint)) {
             return;
         }
         instance.quantizedPoints.Remove(quantizedPoint);
-        instance.RegenerateMatricies();
     }
 
     private void RegenerateMatricies() {
-        if (serializedData.grassDatas.Count == 0) {
+        if (instance.quantizedPoints.Count == 0) {
             return;
         }
-        if (modelMatricies != null && modelMatricies.count != serializedData.grassDatas.Count) {
+        if (modelMatricies != null && modelMatricies.count < instance.quantizedPoints.Count) {
             modelMatricies.Release();
-            modelMatricies = new GraphicsBuffer(GraphicsBuffer.Target.Structured, serializedData.grassDatas.Count, sizeof(float) * 16);
+            modelMatricies = new GraphicsBuffer(GraphicsBuffer.Target.Structured, instance.quantizedPoints.Count*2, sizeof(float) * 16);
+            cachedMatricies = new Matrix4x4[instance.quantizedPoints.Count * 2];
         } else if (modelMatricies == null || !modelMatricies.IsValid()) {
             modelMatricies?.Release();
-            modelMatricies = new GraphicsBuffer(GraphicsBuffer.Target.Structured, serializedData.grassDatas.Count, sizeof(float) * 16);
-            boundedRanges = GetBoundedRanges(serializedData.grassDatas);
+            modelMatricies = new GraphicsBuffer(GraphicsBuffer.Target.Structured, instance.quantizedPoints.Count, sizeof(float) * 16);
+            boundedRanges = GetBoundedRanges(new List<GrassData>(instance.quantizedPoints.Values));
+            cachedMatricies = new Matrix4x4[instance.quantizedPoints.Count];
         }
 
         Vector3 minBounds = new Vector3(boundedRanges[0].GetMinValue(), boundedRanges[1].GetMinValue(), boundedRanges[2].GetMinValue());
         Vector3 maxBounds = new Vector3(boundedRanges[0].GetMaxValue(), boundedRanges[1].GetMaxValue(), boundedRanges[2].GetMaxValue());
 
         Vector3 center = Vector3.Lerp(maxBounds,minBounds, 0.5f);
-        Matrix4x4[] matricies = new Matrix4x4[serializedData.grassDatas.Count];
         int i = 0;
-        foreach (var data in serializedData.grassDatas) {
-            matricies[i] = Matrix4x4.TRS(data.position-center, Quaternion.AngleAxis(data.rotation,Vector3.up)*Quaternion.FromToRotation(Vector3.forward, data.normal.normalized), Vector3.one);
+        foreach (var data in instance.quantizedPoints) {
+            cachedMatricies[i] = Matrix4x4.TRS(data.Value.position-center, Quaternion.AngleAxis(data.Value.rotation,Vector3.up)*Quaternion.FromToRotation(Vector3.forward, data.Value.normal.normalized), Vector3.one);
             i++;
         }
-        modelMatricies.SetData(matricies);
+        modelMatricies.SetData(cachedMatricies);
         if (!TryGetComponent(out LightProbeProxyVolume proxy)) {
             proxy = gameObject.AddComponent<LightProbeProxyVolume>();
         }
         proxy.originCustom = center;
         proxy.sizeCustom = maxBounds - minBounds;
+        materialProperties ??= new MaterialPropertyBlock();
         renderParams = new RenderParams(grassMaterial) {
             worldBounds = new Bounds(center, Vector3.one+(maxBounds-minBounds)),
             material = grassMaterial,
-            matProps = new MaterialPropertyBlock(),
+            matProps = materialProperties,
             lightProbeUsage = LightProbeUsage.UseProxyVolume,
             reflectionProbeUsage = ReflectionProbeUsage.BlendProbes,
             lightProbeProxyVolume = proxy,
         };
+        // TODO: Sending waaaay too much to the GPU, probably should chunk this up!
+        renderParams.matProps.SetBuffer("_GrassMat", modelMatricies);
     }
 
     private static BoundedRange[] GetBoundedRanges(IList<GrassData> points, Vector3? extraPoint = null) {
@@ -209,13 +250,13 @@ public class FlockingData : MonoBehaviour {
         };
     }
 
-    //private void OnDrawGizmos() {
-        //foreach (var pair in quantizedPoints) {
-            //Gizmos.DrawWireCube(pair.Value.position, Vector3.one * 0.1f);
-        //}
-    //}
+    private void OnDrawGizmos() {
+        foreach (var pair in quantizedPoints) {
+            Gizmos.DrawWireCube(pair.Value.position, Vector3.one * 0.1f);
+        }
+    }
 
-    private void BeforeSerialize() {
+    private void ManualSerialization() {
         if (quantizedPoints == null || quantizedPoints.Count == 0) {
             return;
         }
@@ -226,6 +267,18 @@ public class FlockingData : MonoBehaviour {
         } else {
             serializedData.grassDatas.Clear();
             serializedData.grassDatas.AddRange(quantizedPoints.Values);
+        }
+    }
+
+    public void OnBeforeSerialize() {
+    }
+
+    public void OnAfterDeserialize() {
+        boundedRanges = GetBoundedRanges(serializedData.grassDatas);
+        quantizedPoints ??= new Dictionary<QuantizedVector3, GrassData>();
+        quantizedPoints.Clear();
+        foreach (var data in serializedData.grassDatas) {
+            quantizedPoints[BoundedRange.Quantize(data.position, boundedRanges)] = data;
         }
     }
 }

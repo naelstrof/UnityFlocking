@@ -1,5 +1,6 @@
 using UnityEngine;
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.ShortcutManagement;
@@ -18,9 +19,14 @@ class FlockingEditorTool : EditorTool {
     private RaycastHit[] cachedHits;
     
     private SerializedObject serializedObject;
+    private FlockData? flockData;
+    private List<int> cachedTriangles;
+    private List<Vector3> cachedVertices;
 
     private struct FlockData {
         public Vector3 position;
+        public Vector3 normal;
+        public Collider hitCollider;
         public float radius;
         public int divisor;
         public bool adding;
@@ -129,7 +135,6 @@ class FlockingEditorTool : EditorTool {
         }
     }
     private void CalculateIntersections(Collider collider, FlockData flockData) {
-        FlockingData.StartChange();
         if (collider is MeshCollider meshCollider) {
             // foreach triangle
             if (!meshCollider.TryGetComponent(out MeshRenderer meshRenderer)) {
@@ -141,16 +146,23 @@ class FlockingEditorTool : EditorTool {
 
             var mesh = meshFilter.sharedMesh;
             var matrix = meshRenderer.localToWorldMatrix;
-            var triangles = mesh.triangles;
-            var vertices = mesh.vertices;
-            for (int i = 0; i < triangles.Length; i += 3) {
-                Vector3 v0 = matrix.MultiplyPoint(vertices[triangles[i]]);
-                Vector3 v1 = matrix.MultiplyPoint(vertices[triangles[i + 1]]);
-                Vector3 v2 = matrix.MultiplyPoint(vertices[triangles[i + 2]]);
-                TriangleToGrid(v0, v1, v2, flockData);
+            
+            cachedTriangles ??= new List<int>();
+            cachedVertices ??= new List<Vector3>();
+
+            mesh.GetVertices(cachedVertices);
+            for (int s = 0; s < mesh.subMeshCount; s++) {
+                mesh.GetTriangles(cachedTriangles, s);
+                for (int i = 0; i < cachedTriangles.Count; i += 3) {
+                    Vector3 v0 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i]]);
+                    Vector3 v1 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 1]]);
+                    Vector3 v2 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 2]]);
+                    TriangleToGrid(v0, v1, v2, flockData);
+                }
             }
         }
-        FlockingData.EndChange();
+
+        FlockingData.Regenerate();
     }
     
     private void OnSceneGUI(SceneView obj) {
@@ -162,18 +174,24 @@ class FlockingEditorTool : EditorTool {
             case EventType.MouseDown:
                 if (Event.current.button == 0) {
                     GUIUtility.hotControl = controlID;
+                    FlockingData.StartChange();
+                    if (flockData != null) {
+                        var data = flockData.Value;
+                        data.adding = !Event.current.control;
+                        flockData = data;
+                    }
                     Event.current.Use();
                 }
                 break;
             case EventType.MouseUp:
                 if (Event.current.button == 0) {
                     GUIUtility.hotControl = 0;
+                    FlockingData.EndChange();
                     Event.current.Use();
                 }
                 break;
             case EventType.MouseDrag:
             case EventType.MouseMove:
-            case EventType.Repaint:
                 Vector2 position = Event.current.mousePosition;
                 var ray = HandleUtility.GUIPointToWorldRay(position);
                 int hitCount = Physics.RaycastNonAlloc(ray, cachedHits);
@@ -185,10 +203,20 @@ class FlockingEditorTool : EditorTool {
                         minHitDistance = cachedHits[i].distance;
                     }
                 }
-                if (minHit == -1) return;
+
+                if (minHit == -1) {
+                    flockData = null;
+                    return;
+                }
                 var hitInfo = cachedHits[minHit];
-                Handles.color = hitInfo.collider.gameObject.isStatic ? Color.white : Color.gray;
-                Handles.DrawWireDisc(hitInfo.point, hitInfo.normal, toolRadius);
+                flockData = new FlockData {
+                    position = hitInfo.point,
+                    normal = hitInfo.normal,
+                    radius = toolRadius,
+                    divisor = 1 << toolSubdivAmount,
+                    adding = flockData?.adding ?? true,
+                    hitCollider = hitInfo.collider
+                };
                 if (GUIUtility.hotControl == controlID && hitInfo.collider.gameObject.isStatic) {
                     CalculateIntersections(hitInfo.collider, new FlockData {
                         position = hitInfo.point,
@@ -196,8 +224,14 @@ class FlockingEditorTool : EditorTool {
                         divisor = 1<<toolSubdivAmount,
                         adding = true
                     });
+                    FlockingData.RenderIfNeeded();
                 }
-
+                break;
+            case EventType.Repaint:
+                if (flockData.HasValue) {
+                    Handles.color = flockData.Value.hitCollider.gameObject.isStatic ? Color.white : Color.gray;
+                    Handles.DrawWireDisc(flockData.Value.position, flockData.Value.normal, toolRadius);
+                }
                 break;
         }
     }
