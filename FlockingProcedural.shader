@@ -43,7 +43,7 @@ Shader "FlockingProcedural"
 		[HideInInspector][Enum(UnityEngine.Rendering.CompareFunction)] _ZTestTransparent("ZTest Transparent", Int) = 4 // Less equal
 		[HideInInspector][ToggleUI] _TransparentBackfaceEnable("Transparent Backface Enable", Float) = 0
 		[HideInInspector][ToggleUI] _AlphaCutoffEnable("Alpha Cutoff Enable", Float) = 0
-		[HideInInspector][ToggleUI] _UseShadowThreshold("Use Shadow Threshold", Float) = 0
+		[HideInInspector][ToggleUI] _UseShadowThreshold("Use Shadow Threshold", Float) = 1
 		[HideInInspector][ToggleUI] _DoubleSidedEnable("Double Sided Enable", Float) = 0
 		[HideInInspector][Enum(Flip, 0, Mirror, 1, None, 2)] _DoubleSidedNormalMode("Double Sided Normal Mode", Float) = 2
 		[HideInInspector] _DoubleSidedConstants("DoubleSidedConstants", Vector) = (1,1,-1,0)
@@ -347,6 +347,7 @@ Shader "FlockingProcedural"
             #pragma instancing_options renderinglayer
             #define ASE_ABSOLUTE_VERTEX_POS 1
             #pragma shader_feature_local _ _ALPHATEST_ON
+            #define _ALPHATEST_SHADOW_ON 1
             #define HAVE_MESH_MODIFICATION
             #define ASE_SRP_VERSION 140008
 
@@ -1092,6 +1093,7 @@ Shader "FlockingProcedural"
 			#pragma instancing_options renderinglayer
 			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define _ALPHATEST_SHADOW_ON 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140008
 
@@ -1821,6 +1823,7 @@ Shader "FlockingProcedural"
 			#pragma instancing_options renderinglayer
 			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define _ALPHATEST_SHADOW_ON 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140008
 
@@ -2467,6 +2470,7 @@ Shader "FlockingProcedural"
 			#pragma instancing_options renderinglayer
 			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define _ALPHATEST_SHADOW_ON 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140008
 
@@ -3085,6 +3089,7 @@ Shader "FlockingProcedural"
 			#pragma instancing_options renderinglayer
 			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define _ALPHATEST_SHADOW_ON 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140008
 
@@ -3769,6 +3774,7 @@ Shader "FlockingProcedural"
 			#pragma instancing_options renderinglayer
 			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define _ALPHATEST_SHADOW_ON 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140008
 
@@ -4520,6 +4526,7 @@ Shader "FlockingProcedural"
 			#pragma instancing_options renderinglayer
 			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define _ALPHATEST_SHADOW_ON 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140008
 
@@ -5467,6 +5474,7 @@ Shader "FlockingProcedural"
 			#pragma instancing_options renderinglayer
 			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define _ALPHATEST_SHADOW_ON 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140008
 
@@ -6301,7 +6309,7 @@ Node;AmplifyShaderEditor.NormalizeNode;40;96,560;Inherit;False;False;1;0;FLOAT3;
 Node;AmplifyShaderEditor.RangedFloatNode;79;208,496;Inherit;False;Constant;_Float1;Float 0;1;0;Create;True;0;0;0;False;0;False;0.5;0;0;0;0;1;FLOAT;0
 Node;AmplifyShaderEditor.RangedFloatNode;81;176,416;Inherit;False;Constant;_Float2;Float 2;2;0;Create;True;0;0;0;False;0;False;0.25;0;0;0;0;1;FLOAT;0
 Node;AmplifyShaderEditor.RangedFloatNode;78;192,320;Inherit;False;Constant;_Float0;Float 0;1;0;Create;True;0;0;0;False;0;False;0;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;66;496,304;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;FlockingProcedural;da5c9351d94aedb419f727728916b7d3;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;2;Include;;False;;Native;False;0;0;;Include;Flocking.cginc;False;;Custom;False;0;0;;;0;0;Standard;38;Surface Type;0;638490600732733279;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;0;0;Alpha Clipping;1;638490597184848503;  Use Shadow Threshold;0;0;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;1;0;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638490589282398204;0;11;True;True;True;True;True;True;False;False;False;True;True;False;;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;66;496,304;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;FlockingProcedural;da5c9351d94aedb419f727728916b7d3;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;2;Include;;False;;Native;False;0;0;;Include;Flocking.cginc;False;;Custom;False;0;0;;;0;0;Standard;38;Surface Type;0;638490600732733279;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;0;0;Alpha Clipping;1;638490597184848503;  Use Shadow Threshold;1;638491639855104927;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;1;0;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638490589282398204;0;11;True;True;True;True;True;True;False;False;False;True;True;False;;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;67;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;META;0;1;META;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=Meta;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;68;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;ShadowCaster;0;2;ShadowCaster;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;True;3;False;;False;True;1;LightMode=ShadowCaster;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;69;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;SceneSelectionPass;0;3;SceneSelectionPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=SceneSelectionPass;False;False;0;;0;0;Standard;0;False;0
@@ -6333,7 +6341,8 @@ WireConnection;66;4;78;0
 WireConnection;66;7;81;0
 WireConnection;66;9;11;4
 WireConnection;66;10;79;0
+WireConnection;66;30;79;0
 WireConnection;66;11;17;0
 WireConnection;66;12;40;0
 ASEEND*/
-//CHKSM=B9A1469787FFC0C39D3A2F0DD6BA8BE18E2EB49F
+//CHKSM=B08A04CBE09D77666D3375A9195494FD40160186

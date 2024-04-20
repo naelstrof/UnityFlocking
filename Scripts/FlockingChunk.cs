@@ -16,9 +16,9 @@ public class FlockingChunk {
     [Serializable]
     private struct GrassData {
         public Vector3 position;
-        public Vector3 normal;
+        public Quaternion rotation;
+        public Vector3 offset;
         public float scale;
-        public float rotation;
     }
 
     private Dictionary<QuantizedVector3, GrassData> quantizedPoints;
@@ -26,8 +26,9 @@ public class FlockingChunk {
     private Matrix4x4[] cachedMatricies;
     
     private static List<GrassData> cachedPoints;
-    private const int MAX_SUBDIV = 3;
-    private const float MAX_TOLERANCE = 1f/(1<<MAX_SUBDIV);
+    public const int MAX_SUBDIV = 3;
+    public const float MAX_DIVISOR = (1<<MAX_SUBDIV);
+    public const float MAX_TOLERANCE = 1f/MAX_DIVISOR;
     
     private GraphicsBuffer modelMatricies;
     private RenderParams renderParams;
@@ -80,25 +81,24 @@ public class FlockingChunk {
             quantizedPoints[BoundedRange.Quantize(d.position, boundedRanges)] = d;
         }
     }
-
-    public void ScalePoint(Vector3 point, float addScale) {
+    public void SetScale(Vector3 point, Vector3 newScale) {
         var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
         if (!quantizedPoints.ContainsKey(quantizedPoint)) {
             return;
         }
         var d= quantizedPoints[quantizedPoint];
-        d.scale += addScale;
+        d.scale = Mathf.Max(newScale.x,0f);
         quantizedPoints[quantizedPoint] = d;
     }
 
-    public void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, float rotation) {
+    public void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, Vector3 offset, float rotation) {
         var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
         bool shouldRender = !quantizedPoints.ContainsKey(quantizedPoint);
         quantizedPoints[quantizedPoint] = new GrassData {
             position = BoundedRange.Dequantize(quantizedPoint, boundedRanges),
+            rotation = Quaternion.FromToRotation(Vector3.forward, normal) * Quaternion.AngleAxis(rotation, Vector3.forward),
             scale = scale.magnitude,
-            normal = normal,
-            rotation = rotation,
+            offset = offset,
         };
         if (shouldRender) {
             RegenerateMatricies();
@@ -142,12 +142,13 @@ public class FlockingChunk {
         Vector3 center = Vector3.Lerp(minBoundedRange,maxBoundedRange, 0.5f);
         int i = 0;
         foreach (var pair in quantizedPoints) {
-            cachedMatricies[i] = Matrix4x4.TRS(pair.Value.position-center, Quaternion.FromToRotation(Vector3.forward, pair.Value.normal.normalized)*Quaternion.AngleAxis(pair.Value.rotation,Vector3.forward), Vector3.one*pair.Value.scale);
+            Vector3 position = pair.Value.position - center + pair.Value.offset;
+            cachedMatricies[i] = Matrix4x4.TRS(position, pair.Value.rotation, Vector3.one*pair.Value.scale);
             i++;
         }
         modelMatricies.SetData(cachedMatricies);
         if (lightProbeVolume == null) {
-            lightProbeVolume = new GameObject("FlockingLightProbeVolume", typeof(LightProbeProxyVolume)) .GetComponent<LightProbeProxyVolume>();
+            lightProbeVolume = new GameObject("FlockingLightProbeVolume", typeof(LightProbeProxyVolume)).GetComponent<LightProbeProxyVolume>();
         }
 
         //lightProbeVolume.originCustom = center;
@@ -195,5 +196,24 @@ public class FlockingChunk {
         foreach (var d in data) {
             quantizedPoints[BoundedRange.Quantize(d.position, boundedRanges)] = d;
         }
+    }
+
+    public Vector3? GetScale(Vector3 point) {
+        var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
+        if (!quantizedPoints.TryGetValue(quantizedPoint, out GrassData data)) {
+            return null;
+        }
+        return Vector3.one*data.scale;
+    }
+
+    public void SetPointRotation(Vector3 point, Vector3 up, Vector3 forward, float influence) {
+        var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
+        if (!quantizedPoints.ContainsKey(quantizedPoint)) {
+            return;
+        }
+        Quaternion look = Quaternion.LookRotation(up, forward);
+        var d= quantizedPoints[quantizedPoint];
+        d.rotation = Quaternion.Lerp(d.rotation,look, influence);
+        quantizedPoints[quantizedPoint] = d;
     }
 }
