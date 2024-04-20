@@ -74,14 +74,30 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         return newChunk;
     }
 
-    public static void ScalePoint(Vector3 point, float addScale) {
-        instance.GetChunk(point).ScalePoint(point, addScale);
+    public static void SetScale(Vector3 point, Vector3 newScale) {
+        instance.GetChunk(point).SetScale(point, newScale);
     }
 
-    public static void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, float rotation) {
-        instance.GetChunk(point).AddPoint(point, normal, scale, rotation);
+    public static void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, Vector3 offset, float rotation) {
+        instance.GetChunk(point).AddPoint(point, normal, scale, offset, rotation);
+    }
+
+    public static void SetPointRotation(Vector3 point, Vector3 up, Vector3 forward, float influence) {
+        instance.GetChunk(point).SetPointRotation(point, up, forward, influence);
+    }
+
+    public static Vector3? GetScale(Vector3 point) {
+        return instance.GetChunk(point).GetScale(point);
     }
     public static void Regenerate() {
+        if (instance == null) {
+            return;
+        }
+
+        if (instance.chunks == null) {
+            return;
+        }
+        
         foreach (var chunk in instance.chunks) {
             chunk.RegenerateMatricies();
         }
@@ -96,7 +112,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
             Undo.SetCurrentGroupName($"Change {nameof(FlockingData)}");
             undoGroup = Undo.GetCurrentGroup();
         } else {
-            throw new Exception("Tried to start change twice! This shouldn't happen.");
+            //throw new Exception("Tried to start change twice! This shouldn't happen.");
         }
     }
     public static void EndChange() {

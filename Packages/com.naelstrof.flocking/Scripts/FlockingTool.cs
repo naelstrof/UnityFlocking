@@ -1,49 +1,44 @@
+using System;
 using UnityEngine;
+using Random = UnityEngine.Random;
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.EditorTools;
-using UnityEditor.ShortcutManagement;
+//using UnityEditor.ShortcutManagement;
 
-// The second argument in the EditorToolAttribute flags this as a Component tool. That means that it will be instantiated
-// and destroyed along with the selection. EditorTool.targets will contain the selected objects matching the type.
-[EditorTool("Flocking Tool")]
-class FlockingEditorTool : EditorTool {
+//[EditorTool("Flocking Tool")]
+public class FlockingEditorTool : EditorTool {
     private Rect windowRect = new Rect(20, 20, 180, 50);
     [SerializeField, Range(0f,10f)]
     private float toolRadius = 0.5f;
     [SerializeField, Range(0,16)]
     private int toolSubdivAmount = 1;
-    [SerializeField]
-    private float toolFoliageStartScale = 1f;
 
     private int controlID;
     private RaycastHit[] cachedHits;
     
-    private SerializedObject serializedObject;
+    protected SerializedObject serializedObject;
     private FlockData? flockData;
     private List<int> cachedTriangles;
     private List<Vector3> cachedVertices;
-
-    private class FlockOperation {
-    }
-    private class FlockAddOperation : FlockOperation{
-        public float startScale;
-    }
-    private class FlockRemoveOperation : FlockOperation {
-    }
-    private class FlockScaleOperation : FlockOperation {
-        public float scaleMultiplier;
-    }
-
-    private struct FlockData {
+    private Dictionary<Vector3Int, OpData> cachedPoints;
+    protected struct OpData {
         public Vector3 position;
         public Vector3 normal;
+        public Plane surfaceInfo;
+    }
+    protected struct FlockData {
+        public Vector3 position;
+        public Vector3 normal;
+        public Vector2 mouseDelta;
         public Collider hitCollider;
         public float radius;
         public int divisor;
         public bool backfaceCulling;
-        public FlockOperation operation;
+        public bool ctrlHeld;
+        public bool shiftHeld;
+        public Camera camera;
     }
     
     void OnEnable() {
@@ -56,11 +51,11 @@ class FlockingEditorTool : EditorTool {
         cachedHits = null;
     }
 
-    // The second "context" argument accepts an EditorWindow type.
-    [Shortcut("Activate Flocking Tool", typeof(SceneView), KeyCode.P)]
-    static void FlockingToolShortcut() {
-        ToolManager.SetActiveTool<FlockingEditorTool>();
-    }
+    //// The second "context" argument accepts an EditorWindow type.
+    //[Shortcut("Activate Flocking Tool", typeof(SceneView), KeyCode.P)]
+    //static void FlockingToolShortcut() {
+        //ToolManager.SetActiveTool<FlockingEditorTool>();
+    ////}
 
     public override void OnActivated() {
         SceneView.duringSceneGui += OnSceneGUI;
@@ -91,15 +86,33 @@ class FlockingEditorTool : EditorTool {
         windowRect.position = new Vector2(Mathf.Max(0, windowRect.position.x), Mathf.Max(0, windowRect.position.y));
     }
 
-    private void DrawWindow(int id) {
+    protected virtual void DrawWindow(int id) {
         GUI.DragWindow(new Rect(0, 0, 10000, 20));
         EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(toolRadius)), true);
         EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(toolSubdivAmount)), true);
-        EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(toolFoliageStartScale)), true);
-        serializedObject.ApplyModifiedProperties();
     }
 
-    private void TriangleToGrid(Vector3 v0, Vector3 v1, Vector3 v2, FlockData flockData) {
+    protected virtual void StartOperation() {
+    }
+
+    protected virtual void PrePointOperate(Vector3 point, Vector3 normal, Plane realSurface, FlockData data) {
+    }
+
+    protected virtual void PostPointOperate(Vector3 point, Vector3 normal, Plane realSurface, FlockData data) {
+        throw new NotImplementedException();
+        /*switch (data.operation) {
+            case FlockAddOperation add:
+                FlockingData.AddPoint(point, normal, Vector3.one*add.startScale, Random.Range(0f,360f));
+                break;
+            case FlockRemoveOperation remove:
+                FlockingData.RemovePoint(point);
+                break;
+            default:
+                throw new UnityException("can't handle this operation with this tool!");
+        }*/
+    }
+
+    private void TriangleToGrid(Vector3 v0, Vector3 v1, Vector3 v2, FlockData flockData, Operation op) {
         Vector3 normal = Vector3.Cross((v1-v0).normalized, (v2-v0).normalized).normalized;
         if (flockData.backfaceCulling && Vector3.Dot(normal, flockData.normal) <= 0.1f) {
             return;
@@ -143,18 +156,19 @@ class FlockingEditorTool : EditorTool {
                         continue;
                     }
 
-                    if (flockData.operation is FlockAddOperation add) {
-                        FlockingData.AddPoint(testPosition, normal, Vector3.one*add.startScale, Random.Range(0f,360f));
-                    } else if (flockData.operation is FlockRemoveOperation remove) {
-                        FlockingData.RemovePoint(testPosition);
-                    } else if (flockData.operation is FlockScaleOperation scale) {
-                        FlockingData.ScalePoint(testPosition, scale.scaleMultiplier);
-                    }
+                    Plane surfacePlane = new Plane(v0, v1, v2);
+                    cachedPoints[new Vector3Int(x, y, z)] = new OpData() {
+                        position = testPosition,
+                        normal = normal,
+                        surfaceInfo = surfacePlane,
+                    };
                 }
             }
         }
     }
-    private void CalculateIntersections(Collider collider, FlockData flockData) {
+
+    private delegate void Operation(Vector3 point, Vector3 normal, Plane realSurface, FlockData data);
+    private void CalculateIntersections(Collider collider, FlockData flockData, Operation op) {
         if (collider is MeshCollider meshCollider) {
             // foreach triangle
             if (!meshCollider.TryGetComponent(out MeshRenderer meshRenderer)) {
@@ -177,16 +191,20 @@ class FlockingEditorTool : EditorTool {
                     Vector3 v0 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i]]);
                     Vector3 v1 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 1]]);
                     Vector3 v2 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 2]]);
-                    TriangleToGrid(v0, v1, v2, flockData);
+                    TriangleToGrid(v0, v1, v2, flockData, op);
                 }
             }
+        }
+
+        foreach (var pair in cachedPoints) {
+            op.Invoke(pair.Value.position, pair.Value.normal, pair.Value.surfaceInfo, flockData);
         }
 
         FlockingData.Regenerate();
     }
     
     private void OnSceneGUI(SceneView obj) {
-        if (ToolManager.activeToolType != typeof(FlockingEditorTool)) {
+        if (ToolManager.activeToolType != GetType()) {
             return;
         }
 
@@ -223,34 +241,28 @@ class FlockingEditorTool : EditorTool {
                     flockData = null;
                     return;
                 }
+                
                 var hitInfo = cachedHits[minHit];
-                FlockOperation operation;
-                if (Event.current.shift) {
-                    float delta = Event.current.delta.magnitude;
-                    operation = new FlockScaleOperation() {
-                        scaleMultiplier = (Event.current.control ? -delta : delta)*0.001f,
-                    };
-                } else {
-                    if (!Event.current.control) {
-                        operation = new FlockAddOperation() {
-                            startScale = toolFoliageStartScale,
-                        };
-                    } else {
-                        operation = new FlockRemoveOperation();
-                    }
-                }
-
                 flockData = new FlockData {
                     position = hitInfo.point,
                     normal = hitInfo.normal,
+                    mouseDelta = Event.current.delta,
                     radius = toolRadius,
                     divisor = 1 << toolSubdivAmount,
-                    operation = operation,
+                    ctrlHeld = Event.current.control,
+                    shiftHeld = Event.current.shift,
                     hitCollider = hitInfo.collider,
                     backfaceCulling = true,
+                    camera = obj.camera,
                 };
+                
+                cachedPoints ??= new Dictionary<Vector3Int, OpData>();
+                cachedPoints.Clear();
+                
                 if (GUIUtility.hotControl == controlID && hitInfo.collider.gameObject.isStatic) {
-                    CalculateIntersections(hitInfo.collider, flockData.Value);
+                    StartOperation();
+                    CalculateIntersections(hitInfo.collider, flockData.Value, PrePointOperate);
+                    CalculateIntersections(hitInfo.collider, flockData.Value, PostPointOperate);
                     obj.Repaint();
                 }
                 break;
