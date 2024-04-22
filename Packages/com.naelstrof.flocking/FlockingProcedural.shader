@@ -1,12 +1,13 @@
 // Made with Amplify Shader Editor v1.9.3.3
 // Available at the Unity Asset Store - http://u3d.as/y3X 
-Shader "FlockingProcedural"
+Shader "Flocking/ProceduralPrimitive"
 {
 	Properties
 	{
 		[HideInInspector] _AlphaCutoff("Alpha Cutoff ", Range(0, 1)) = 0.5
 		_BaseColorMap("BaseColorMap", 2D) = "white" {}
 		_NormalBlend("NormalBlend", Range( 0 , 1)) = 0
+		_Smoothness("Smoothness", Range( 0 , 1)) = 0.25
 
 		[HideInInspector] _RenderQueueType("Render Queue Type", Float) = 1
 		[HideInInspector][ToggleUI] _AddPrecomputedVelocity("Add Precomputed Velocity", Float) = 1
@@ -342,13 +343,11 @@ Shader "FlockingProcedural"
 			HLSLPROGRAM
             #pragma shader_feature_local_fragment _ _DISABLE_DECALS
             #define _SPECULAR_OCCLUSION_FROM_AO 1
-            #pragma instancing_options renderinglayer
             #pragma shader_feature_local _ _ALPHATEST_ON
             #define ASE_NEED_CULLFACE 1
             #pragma shader_feature_local _ _DOUBLESIDED_ON
             #define _ALPHATEST_SHADOW_ON 1
             #define ASE_ABSOLUTE_VERTEX_POS 1
-            #define _AMBIENT_OCCLUSION 1
             #define HAVE_MESH_MODIFICATION
             #define ASE_SRP_VERSION 140010
 
@@ -442,6 +441,7 @@ Shader "FlockingProcedural"
 
 			CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -853,8 +853,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord5.xy = vertexToFrag84;
@@ -877,7 +877,7 @@ Shader "FlockingProcedural"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS =  inputMesh.tangentOS ;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -1043,12 +1043,12 @@ Shader "FlockingProcedural"
 				#endif
 
 				surfaceDescription.Emission = 0;
-				surfaceDescription.Smoothness = 0.25;
-				surfaceDescription.Occlusion = 1.0;
+				surfaceDescription.Smoothness = _Smoothness;
+				surfaceDescription.Occlusion = 1;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold = 0.5;
+				surfaceDescription.AlphaClipThreshold = _AlphaCutoff;
 				#endif
 
 				#ifdef _ALPHATEST_SHADOW_ON
@@ -1138,13 +1138,11 @@ Shader "FlockingProcedural"
 			HLSLPROGRAM
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma instancing_options renderinglayer
 			#pragma shader_feature_local _ _ALPHATEST_ON
 			#define ASE_NEED_CULLFACE 1
 			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
 			#define ASE_ABSOLUTE_VERTEX_POS 1
-			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140010
 
@@ -1231,6 +1229,7 @@ Shader "FlockingProcedural"
 
 			CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -1649,8 +1648,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord2.xy = vertexToFrag84;
@@ -1673,7 +1672,7 @@ Shader "FlockingProcedural"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS =  inputMesh.tangentOS ;
 
 				outputPackedVaryingsMeshToPS.positionCS = UnityMetaVertexPosition(inputMesh.positionOS, inputMesh.uv1.xy, inputMesh.uv2.xy, unity_LightmapST, unity_DynamicLightmapST);
@@ -1827,12 +1826,12 @@ Shader "FlockingProcedural"
 				#endif
 
 				surfaceDescription.Emission = 0;
-				surfaceDescription.Smoothness = 0.25;
-				surfaceDescription.Occlusion = 1.0;
+				surfaceDescription.Smoothness = _Smoothness;
+				surfaceDescription.Occlusion = 1;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold = 0.5;
+				surfaceDescription.AlphaClipThreshold = _AlphaCutoff;
 				#endif
 
 				#ifdef _ENABLE_GEOMETRIC_SPECULAR_AA
@@ -1915,13 +1914,11 @@ Shader "FlockingProcedural"
 			HLSLPROGRAM
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma instancing_options renderinglayer
 			#pragma shader_feature_local _ _ALPHATEST_ON
 			#define ASE_NEED_CULLFACE 1
 			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
 			#define ASE_ABSOLUTE_VERTEX_POS 1
-			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140010
 
@@ -2008,6 +2005,7 @@ Shader "FlockingProcedural"
 
 			CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -2364,8 +2362,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = vertexToFrag84;
@@ -2388,7 +2386,7 @@ Shader "FlockingProcedural"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -2555,7 +2553,7 @@ Shader "FlockingProcedural"
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold = 0.5;
+				surfaceDescription.AlphaClipThreshold = _AlphaCutoff;
 				#endif
 
 				#ifdef _ALPHATEST_SHADOW_ON
@@ -2612,13 +2610,11 @@ Shader "FlockingProcedural"
 			HLSLPROGRAM
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma instancing_options renderinglayer
 			#pragma shader_feature_local _ _ALPHATEST_ON
 			#define ASE_NEED_CULLFACE 1
 			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
 			#define ASE_ABSOLUTE_VERTEX_POS 1
-			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140010
 
@@ -2704,6 +2700,7 @@ Shader "FlockingProcedural"
 
 			CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -3064,8 +3061,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = vertexToFrag84;
@@ -3088,7 +3085,7 @@ Shader "FlockingProcedural"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -3237,7 +3234,7 @@ Shader "FlockingProcedural"
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold = 0.5;
+				surfaceDescription.AlphaClipThreshold = _AlphaCutoff;
 				#endif
 
 				#ifdef _DEPTHOFFSET_ON
@@ -3281,13 +3278,11 @@ Shader "FlockingProcedural"
 			HLSLPROGRAM
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma instancing_options renderinglayer
 			#pragma shader_feature_local _ _ALPHATEST_ON
 			#define ASE_NEED_CULLFACE 1
 			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
 			#define ASE_ABSOLUTE_VERTEX_POS 1
-			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140010
 
@@ -3375,6 +3370,7 @@ Shader "FlockingProcedural"
 
 			CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -3743,8 +3739,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = vertexToFrag84;
@@ -3767,7 +3763,7 @@ Shader "FlockingProcedural"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS =  inputMesh.tangentOS ;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -3940,11 +3936,11 @@ Shader "FlockingProcedural"
 				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.Normal = float3( 0, 0, 1 );
-				surfaceDescription.Smoothness = 0.25;
+				surfaceDescription.Smoothness = _Smoothness;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold = 0.5;
+				surfaceDescription.AlphaClipThreshold = _AlphaCutoff;
 				#endif
 
 				#ifdef _DEPTHOFFSET_ON
@@ -4016,13 +4012,11 @@ Shader "FlockingProcedural"
 			HLSLPROGRAM
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma instancing_options renderinglayer
 			#pragma shader_feature_local _ _ALPHATEST_ON
 			#define ASE_NEED_CULLFACE 1
 			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
 			#define ASE_ABSOLUTE_VERTEX_POS 1
-			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140010
 
@@ -4110,6 +4104,7 @@ Shader "FlockingProcedural"
 
 			CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -4471,8 +4466,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = vertexToFrag84;
@@ -4494,7 +4489,7 @@ Shader "FlockingProcedural"
 				#else
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 				return inputMesh;
 			}
@@ -4729,11 +4724,11 @@ Shader "FlockingProcedural"
 				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.Normal = float3( 0, 0, 1 );
-				surfaceDescription.Smoothness = 0.25;
+				surfaceDescription.Smoothness = _Smoothness;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold = 0.5;
+				surfaceDescription.AlphaClipThreshold = _AlphaCutoff;
 				#endif
 
 				#ifdef _DEPTHOFFSET_ON
@@ -4818,13 +4813,11 @@ Shader "FlockingProcedural"
 			HLSLPROGRAM
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma instancing_options renderinglayer
 			#pragma shader_feature_local _ _ALPHATEST_ON
 			#define ASE_NEED_CULLFACE 1
 			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
 			#define ASE_ABSOLUTE_VERTEX_POS 1
-			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140010
 
@@ -4928,6 +4921,7 @@ Shader "FlockingProcedural"
 
 			CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -5345,8 +5339,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = vertexToFrag84;
@@ -5368,7 +5362,7 @@ Shader "FlockingProcedural"
 				#else
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 				return inputMesh;
 			}
@@ -5635,12 +5629,12 @@ Shader "FlockingProcedural"
 				#endif
 
 				surfaceDescription.Emission = 0;
-				surfaceDescription.Smoothness = 0.25;
-				surfaceDescription.Occlusion = 1.0;
+				surfaceDescription.Smoothness = _Smoothness;
+				surfaceDescription.Occlusion = 1;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold = 0.5;
+				surfaceDescription.AlphaClipThreshold = _AlphaCutoff;
 				#endif
 
 				#ifdef _SPECULAR_OCCLUSION_CUSTOM
@@ -5816,14 +5810,11 @@ Shader "FlockingProcedural"
             HLSLPROGRAM
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma multi_compile_instancing
-			#pragma instancing_options renderinglayer
 			#pragma shader_feature_local _ _ALPHATEST_ON
 			#define ASE_NEED_CULLFACE 1
 			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
 			#define ASE_ABSOLUTE_VERTEX_POS 1
-			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
 			#define ASE_SRP_VERSION 140010
 
@@ -5913,6 +5904,7 @@ Shader "FlockingProcedural"
 	
             CBUFFER_START( UnityPerMaterial )
 			float _NormalBlend;
+			float _Smoothness;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
 			float _RenderQueueType;
@@ -6141,8 +6133,8 @@ Shader "FlockingProcedural"
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
-				float3 normalizeResult40 = normalize( lerpResult38 );
+				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult158 = normalize( lerpResult156 );
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = vertexToFrag84;
@@ -6164,7 +6156,7 @@ Shader "FlockingProcedural"
 				#else
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
-				inputMesh.normalOS = normalizeResult40;
+				inputMesh.normalOS = normalizeResult158;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 				return inputMesh;
 			}
@@ -6399,7 +6391,7 @@ Shader "FlockingProcedural"
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
-				surfaceDescription.AlphaClipThreshold =  0.5;
+				surfaceDescription.AlphaClipThreshold =  _AlphaCutoff;
 				#endif
 
 				outColor = _SelectionID;
@@ -6685,24 +6677,22 @@ Shader "FlockingProcedural"
 }
 /*ASEBEGIN
 Version=19303
-Node;AmplifyShaderEditor.VertexIdVariableNode;83;-1872,208;Inherit;False;0;1;INT;0
-Node;AmplifyShaderEditor.InstanceIdNode;24;-1888,320;Inherit;False;False;0;1;INT;0
-Node;AmplifyShaderEditor.CustomExpressionNode;22;-1632,176;Inherit;False;GetGrassInstance(instanceID, vertexID, grassMat, localPosition, localNormal, uv)@;7;File;6;True;vertexID;OBJECT;0;In;uint;Inherit;False;True;instanceID;OBJECT;0;In;uint;Inherit;False;True;grassMat;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;Out;;Inherit;False;True;localPosition;FLOAT3;0,0,0;Out;;Inherit;False;True;localNormal;FLOAT3;0,0,0;Out;;Inherit;False;True;uv;FLOAT2;0,0;Out;;Inherit;False;GetGrassInstance;False;False;0;0acddabae6c4b41408f4a566b4f7d822;False;7;0;FLOAT;0;False;1;OBJECT;0;False;2;OBJECT;0;False;3;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;4;FLOAT3;0,0,0;False;5;FLOAT3;0,0,0;False;6;FLOAT2;0,0;False;5;FLOAT;0;FLOAT4x4;4;FLOAT3;5;FLOAT3;6;FLOAT2;7
-Node;AmplifyShaderEditor.Vector3Node;37;-1232,608;Inherit;False;Constant;_Vector0;Vector 0;1;0;Create;True;0;0;0;False;0;False;0,0,1;0,0,0;0;4;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;39;-736,688;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.RangedFloatNode;80;-480,752;Inherit;False;Property;_NormalBlend;NormalBlend;1;0;Create;True;0;0;0;False;0;False;0;0;0;1;0;1;FLOAT;0
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;32;-528,512;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.DynamicAppendNode;54;-800,176;Inherit;False;FLOAT4;4;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;FLOAT;1;False;1;FLOAT4;0
-Node;AmplifyShaderEditor.LerpOp;38;-176,640;Inherit;False;3;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;2;FLOAT;0.5;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.VertexToFragmentNode;84;-416,272;Inherit;False;False;False;1;0;FLOAT2;0,0;False;1;FLOAT2;0
+Node;AmplifyShaderEditor.VertexIdVariableNode;83;-1536,368;Inherit;False;0;1;INT;0
+Node;AmplifyShaderEditor.InstanceIdNode;24;-1552,480;Inherit;False;False;0;1;INT;0
+Node;AmplifyShaderEditor.CustomExpressionNode;22;-1296,336;Inherit;False;GetGrassInstance(instanceID, vertexID, grassMat, localPosition, localNormal, uv)@;7;File;6;True;vertexID;OBJECT;0;In;uint;Inherit;False;True;instanceID;OBJECT;0;In;uint;Inherit;False;True;grassMat;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;Out;;Inherit;False;True;localPosition;FLOAT3;0,0,0;Out;;Inherit;False;True;localNormal;FLOAT3;0,0,0;Out;;Inherit;False;True;uv;FLOAT2;0,0;Out;;Inherit;False;GetGrassInstance;False;False;0;0acddabae6c4b41408f4a566b4f7d822;False;7;0;FLOAT;0;False;1;OBJECT;0;False;2;OBJECT;0;False;3;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;4;FLOAT3;0,0,0;False;5;FLOAT3;0,0,0;False;6;FLOAT2;0,0;False;5;FLOAT;0;FLOAT4x4;4;FLOAT3;5;FLOAT3;6;FLOAT2;7
+Node;AmplifyShaderEditor.Vector3Node;37;-1088,896;Inherit;False;Constant;_Vector0;Vector 0;1;0;Create;True;0;0;0;False;0;False;0,0,1;0,0,0;0;4;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3
+Node;AmplifyShaderEditor.RangedFloatNode;80;-576,1056;Inherit;False;Property;_NormalBlend;NormalBlend;1;0;Create;True;0;0;0;False;0;False;0;0;0;1;0;1;FLOAT;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;32;-560,688;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;39;-832,864;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.LerpOp;156;-176,864;Inherit;False;3;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;2;FLOAT;0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.DynamicAppendNode;54;-864,272;Inherit;False;FLOAT4;4;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;FLOAT;1;False;1;FLOAT4;0
+Node;AmplifyShaderEditor.VertexToFragmentNode;84;-592,368;Inherit;False;False;False;1;0;FLOAT2;0,0;False;1;FLOAT2;0
 Node;AmplifyShaderEditor.SamplerNode;11;112,64;Inherit;True;Property;_BaseColorMap;BaseColorMap;0;0;Create;True;0;0;0;False;0;False;-1;ac93f3feddfe1824da6ae203ffbc3cac;ac93f3feddfe1824da6ae203ffbc3cac;True;0;False;white;Auto;False;Object;-1;Auto;Texture2D;8;0;SAMPLER2D;;False;1;FLOAT2;0,0;False;2;FLOAT;0;False;3;FLOAT2;0,0;False;4;FLOAT2;0,0;False;5;FLOAT;1;False;6;FLOAT;0;False;7;SAMPLERSTATE;;False;5;COLOR;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;17;-560,80;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT4;0,0,0,0;False;1;FLOAT4;0
-Node;AmplifyShaderEditor.NormalizeNode;40;80,704;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.RangedFloatNode;78;224,320;Inherit;False;Constant;_Float0;Float 0;1;0;Create;True;0;0;0;False;0;False;0;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.RangedFloatNode;79;160,592;Inherit;False;Constant;_Float1;Float 0;1;0;Create;True;0;0;0;False;0;False;0.5;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.RangedFloatNode;81;208,400;Inherit;False;Constant;_Float2;Float 2;2;0;Create;True;0;0;0;False;0;False;0.25;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.RangedFloatNode;118;224,512;Inherit;False;Constant;_Float3;Float 2;2;0;Create;True;0;0;0;False;0;False;1;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;107;496,304;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;FlockingProcedural;53b46d85872c5b24c8f4f0a1c3fe4c87;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;0;;0;0;Standard;38;Surface Type;0;0;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;1;638493527226403169;Alpha Clipping;1;638493523555406782;  Use Shadow Threshold;1;638493527239930853;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;1;0;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638493539490901669;0;11;True;True;True;True;True;True;False;False;False;True;True;True;;False;0
+Node;AmplifyShaderEditor.RangedFloatNode;78;112,384;Inherit;False;Constant;_Float0;Float 0;1;0;Create;True;0;0;0;False;0;False;0;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.RangedFloatNode;157;-32,480;Inherit;False;Property;_Smoothness;Smoothness;2;0;Create;True;0;0;0;False;0;False;0.25;0.25;0;1;0;1;FLOAT;0
+Node;AmplifyShaderEditor.NormalizeNode;158;32,688;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;17;-640,192;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT4;0,0,0,0;False;1;FLOAT4;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;107;496,304;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;Flocking/ProceduralPrimitive;53b46d85872c5b24c8f4f0a1c3fe4c87;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;0;;0;0;Standard;38;Surface Type;0;0;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;1;638493527226403169;Alpha Clipping;1;638493523555406782;  Use Shadow Threshold;1;638493527239930853;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;0;638494125464315197;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638493539490901669;0;11;True;True;True;True;True;True;False;False;False;True;True;True;;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;108;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;META;0;1;META;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=Meta;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;109;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;ShadowCaster;0;2;ShadowCaster;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;True;3;False;;False;True;1;LightMode=ShadowCaster;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;110;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;SceneSelectionPass;0;3;SceneSelectionPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=SceneSelectionPass;False;False;0;;0;0;Standard;0;False;0
@@ -6715,26 +6705,24 @@ Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;116;496,304;Float;False;Fal
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;117;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;ScenePickingPass;0;10;ScenePickingPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;True;3;False;;False;True;1;LightMode=Picking;False;False;0;;0;0;Standard;0;False;0
 WireConnection;22;1;83;0
 WireConnection;22;2;24;0
-WireConnection;39;0;22;4
-WireConnection;39;1;37;0
 WireConnection;32;0;22;4
 WireConnection;32;1;22;6
+WireConnection;39;0;22;4
+WireConnection;39;1;37;0
+WireConnection;156;0;32;0
+WireConnection;156;1;39;0
+WireConnection;156;2;80;0
 WireConnection;54;0;22;5
-WireConnection;38;0;32;0
-WireConnection;38;1;39;0
-WireConnection;38;2;80;0
 WireConnection;84;0;22;7
 WireConnection;11;1;84;0
+WireConnection;158;0;156;0
 WireConnection;17;0;22;4
 WireConnection;17;1;54;0
-WireConnection;40;0;38;0
 WireConnection;107;0;11;0
 WireConnection;107;4;78;0
-WireConnection;107;7;81;0
-WireConnection;107;8;118;0
+WireConnection;107;7;157;0
 WireConnection;107;9;11;4
-WireConnection;107;10;79;0
 WireConnection;107;11;17;0
-WireConnection;107;12;40;0
+WireConnection;107;12;158;0
 ASEEND*/
-//CHKSM=9DAE16C70CDE625230D36F03D7A5AE09AE4C1329
+//CHKSM=C5A001785771BBD5CA812FD27564A5B674A24AFC

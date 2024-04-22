@@ -10,12 +10,11 @@ using UnityEditor;
 [ExecuteAlways]
 public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
     [SerializeField] List<FlockingChunk> chunks;
-    [SerializeField] private List<Mesh> grassMeshes;
-    [SerializeField] private Material grassMaterial;
+    [SerializeField] private FoliagePack foliagePack;
 
     private static FlockingData instance;
     private static int undoGroup = -1;
-    private const int CHUNK_SIZE = 32;
+    public const int CHUNK_SIZE = 16;
     
     private void OnEnable() {
         if (instance == null || instance == this) {
@@ -68,8 +67,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         Vector3Int nextChunk = flooredChunk+Vector3Int.one;
 
         newChunk.SetBoundRanges(flooredChunk*CHUNK_SIZE, nextChunk*CHUNK_SIZE);
-        newChunk.SetMaterial(grassMaterial);
-        newChunk.SetMeshes(grassMeshes);
+        newChunk.SetFoliagePack(foliagePack);
         chunks.Add(newChunk);
         return newChunk;
     }
@@ -107,6 +105,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
     public static void StartChange() {
         if (instance == null) {
             instance = new GameObject("Flocking Data", typeof(FlockingData)).GetComponent<FlockingData>();
+            instance.foliagePack = AssetDatabase.LoadAssetAtPath<FoliagePack>( AssetDatabase.GUIDToAssetPath("48d57ab6cc0493f448d4a6ff0674ee3c"));
         }
         if (undoGroup == -1) {
             Undo.SetCurrentGroupName($"Change {nameof(FlockingData)}");
@@ -129,7 +128,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         //instance.Update();
     }
     #endif
-    public static int GetIndexCount() => instance.grassMeshes?.Count ?? 0;
+    public static FoliagePack GetFoliagePack() => instance.foliagePack;
     public static void RemovePoint(Vector3 point) {
         instance.GetChunk(point).RemovePoint(point);
     }

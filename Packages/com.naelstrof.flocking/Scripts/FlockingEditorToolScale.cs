@@ -36,7 +36,7 @@ public class FlockingEditorToolScale : FlockingEditorTool {
     }
 
     protected override void PostPointOperate(Vector3 point, Vector3 normal, Plane realSurface, FlockData data) {
-        float falloff = 1f - Vector3.Distance(point, data.position) / data.radius;
+        float falloff = 1f - Mathf.Clamp01(Vector3.Distance(point, data.position) / data.radius);
         if (!data.shiftHeld) { // Adjust scale
             var startScale = FlockingData.GetScale(point);
             if (startScale == null && !data.ctrlHeld) {
