@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3bae894e22fe6ba49b6ff74152c70710, type: 3}
+  m_Name: Default Foliage Pack
+  m_EditorClassIdentifier: 
+  foliages:
+  - foliageType: 0
+    mesh: {fileID: 7329928758605431418, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 0
+    mesh: {fileID: -7123678502535802070, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 0
+    mesh: {fileID: 3854576219270193796, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 0
+    mesh: {fileID: 2957640340709566153, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 0
+    mesh: {fileID: 8118079969954951857, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 0
+    mesh: {fileID: 4778645971225334332, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 0
+    mesh: {fileID: 5348019612806945263, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 1
+    mesh: {fileID: 3284317394355905387, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 1
+    mesh: {fileID: 1529260590574202774, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 1
+    mesh: {fileID: 9007958714751073387, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 1
+    mesh: {fileID: -1672428287894222806, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 2
+    mesh: {fileID: 557698175387065317, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 2
+    mesh: {fileID: 535959306185488994, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 2
+    mesh: {fileID: -5999543654338476034, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 2
+    mesh: {fileID: -4775422502166308887, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 2
+    mesh: {fileID: 5519692944905508772, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  - foliageType: 2
+    mesh: {fileID: 7623435762235465000, guid: 30b0268b49c86d144b7f305725d0b0bd, type: 3}
+  material: {fileID: 2100000, guid: 3dca0f17c6fb6174a8a3c6281cf89f34, type: 2}

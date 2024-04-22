@@ -166,34 +166,65 @@ public class FlockingEditorTool : EditorTool {
             }
         }
     }
+    private void HandleMeshCollider(MeshCollider meshCollider, FlockData flockData, Operation op) {
+        // foreach triangle
+        if (!meshCollider.TryGetComponent(out MeshRenderer meshRenderer)) {
+            return;
+        }
+        if (!meshCollider.TryGetComponent(out MeshFilter meshFilter)) {
+            return;
+        }
+
+        var mesh = meshFilter.sharedMesh;
+        var matrix = meshRenderer.localToWorldMatrix;
+        
+        cachedTriangles ??= new List<int>();
+        cachedVertices ??= new List<Vector3>();
+
+        mesh.GetVertices(cachedVertices);
+        for (int s = 0; s < mesh.subMeshCount; s++) {
+            mesh.GetTriangles(cachedTriangles, s);
+            for (int i = 0; i < cachedTriangles.Count; i += 3) {
+                Vector3 v0 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i]]);
+                Vector3 v1 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 1]]);
+                Vector3 v2 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 2]]);
+                TriangleToGrid(v0, v1, v2, flockData, op);
+            }
+        }
+    }
+
+    private void HandleConvexCollider(Collider collider, FlockData flockData, Operation op) {
+        var bounds = collider.bounds;
+        Vector3Int min = Vector3Int.FloorToInt((bounds.center - bounds.extents) * flockData.divisor)-Vector3Int.one*4;
+        Vector3Int max = Vector3Int.FloorToInt((bounds.center + bounds.extents) * flockData.divisor)+Vector3Int.one*4;
+        float tolerance = 1f / flockData.divisor;
+        for (int x = min.x; x < max.x; x++) {
+            for (int y = min.y; y < max.y; y++) {
+                for (int z = min.z; z < max.z; z++) {
+                    Vector3 testPosition = new Vector3(x, y, z)/flockData.divisor;
+                    Vector3 closest = collider.ClosestPoint(testPosition);
+                    if (testPosition == closest) continue;
+                    if (Vector3.Distance(testPosition, closest) > tolerance) continue;
+                    
+                    Vector3 dir = (closest - testPosition).normalized;
+                    if (collider.Raycast(new Ray(testPosition, dir), out RaycastHit hitInfo, 10f)) {
+                        cachedPoints[new Vector3Int(x, y, z)] = new OpData() {
+                            position = testPosition,
+                            normal = hitInfo.normal,
+                            surfaceInfo = new Plane(hitInfo.normal, hitInfo.point),
+                        };
+                    }
+                }
+            }
+        }
+    }
 
     private delegate void Operation(Vector3 point, Vector3 normal, Plane realSurface, FlockData data);
     private void CalculateIntersections(Collider collider, FlockData flockData, Operation op) {
         if (collider is MeshCollider meshCollider) {
-            // foreach triangle
-            if (!meshCollider.TryGetComponent(out MeshRenderer meshRenderer)) {
-                return;
-            }
-            if (!meshCollider.TryGetComponent(out MeshFilter meshFilter)) {
-                return;
-            }
-
-            var mesh = meshFilter.sharedMesh;
-            var matrix = meshRenderer.localToWorldMatrix;
-            
-            cachedTriangles ??= new List<int>();
-            cachedVertices ??= new List<Vector3>();
-
-            mesh.GetVertices(cachedVertices);
-            for (int s = 0; s < mesh.subMeshCount; s++) {
-                mesh.GetTriangles(cachedTriangles, s);
-                for (int i = 0; i < cachedTriangles.Count; i += 3) {
-                    Vector3 v0 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i]]);
-                    Vector3 v1 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 1]]);
-                    Vector3 v2 = matrix.MultiplyPoint(cachedVertices[cachedTriangles[i + 2]]);
-                    TriangleToGrid(v0, v1, v2, flockData, op);
-                }
-            }
+            HandleMeshCollider(meshCollider, flockData, op);
+        } else {
+            HandleConvexCollider(collider, flockData, op);
         }
 
         foreach (var pair in cachedPoints) {

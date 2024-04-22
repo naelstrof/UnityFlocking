@@ -6,16 +6,16 @@ using UnityEngine.Rendering;
 
 [Serializable]
 public class FlockingChunk {
-    [SerializeField] private List<Mesh> meshes;
-    [SerializeField] private Material grassMaterial;
+    [SerializeField]
+    private FoliagePack foliagePack;
     
-    [SerializeField] private List<GrassData> data;
+    [SerializeField] private List<CPUFoliage> data;
     
     [SerializeField] private Vector3 minBoundedRange;
     [SerializeField] private Vector3 maxBoundedRange;
 
     [Serializable]
-    private struct GrassData {
+    private struct CPUFoliage {
         public int index;
         public Vector3 position;
         public Quaternion rotation;
@@ -23,16 +23,16 @@ public class FlockingChunk {
         public float scale;
     }
 
-    private struct FoliageChunk {
+    private struct GPUFoliage {
         public Matrix4x4 matrix;
         public int meshIndex;
     }
 
-    private Dictionary<QuantizedVector3, GrassData> quantizedPoints;
+    private Dictionary<QuantizedVector3, CPUFoliage> quantizedPoints;
     private BoundedRange[] boundedRanges;
-    private FoliageChunk[] cachedMatricies;
+    private GPUFoliage[] cachedMatricies;
     
-    private static List<GrassData> cachedPoints;
+    private static List<CPUFoliage> cachedPoints;
     public const int MAX_SUBDIV = 3;
     public const float MAX_DIVISOR = (1<<MAX_SUBDIV);
     public const float MAX_TOLERANCE = 1f/MAX_DIVISOR;
@@ -55,7 +55,7 @@ public class FlockingChunk {
             new BoundedRange(minBoundedRange.z, maxBoundedRange.z, MAX_TOLERANCE)
         };
         OnAfterDeserialize();
-        SetMeshes(meshes);
+        SetFoliagePack(foliagePack);
         RegenerateMatricies();
     }
 
@@ -64,15 +64,17 @@ public class FlockingChunk {
         foliageChunks = null;
     }
 
-    public void SetMeshes(ICollection<Mesh> newMeshes) {
+    public void SetFoliagePack(FoliagePack pack) {
         int? vertexCount = null;
-        foreach (var mesh in newMeshes) {
+        foreach (var foliage in pack.foliages) {
+            var mesh = foliage.mesh;
             vertexCount ??= (int)mesh.GetIndexCount(0);
             if (vertexCount.Value != (int)mesh.GetIndexCount(0)) {
                 throw new UnityException("Cannot use meshes with differing triangle counts.");
             }
         }
-        meshes = new List<Mesh>(newMeshes);
+
+        foliagePack = pack;
         
         List<int> triangles = new List<int>();
         List<Vector3> vertices = new List<Vector3>();
@@ -83,7 +85,8 @@ public class FlockingChunk {
         List<Vector3> cachedVertices = new List<Vector3>();
         List<Vector3> cachedNormals = new List<Vector3>();
         List<Vector2> cachedUvs = new List<Vector2>();
-        foreach (var mesh in meshes) {
+        foreach (var foliage in pack.foliages) {
+            var mesh = foliage.mesh;
             
             cachedTriangles.Clear();
             cachedVertices.Clear();
@@ -127,10 +130,7 @@ public class FlockingChunk {
         materialPropertyBlock.SetBuffer("_GrassPositions", meshPositions);
         materialPropertyBlock.SetBuffer("_GrassNormals", meshNormals);
         materialPropertyBlock.SetBuffer("_GrassUVs", meshUVs);
-        materialPropertyBlock.SetInt("_GrassIndexCount", (int)meshes[0].GetIndexCount(0));
-    }
-    public void SetMaterial(Material newMaterial) {
-        grassMaterial = newMaterial;
+        materialPropertyBlock.SetInt("_GrassIndexCount", (int)foliagePack.foliages[0].mesh.GetIndexCount(0));
     }
     public bool ContainsPoint(Vector3 check) {
         return check.x >= minBoundedRange.x && check.x <= maxBoundedRange.x &&
@@ -146,12 +146,12 @@ public class FlockingChunk {
             new BoundedRange(minBoundedRange.y, maxBoundedRange.y, MAX_TOLERANCE),
             new BoundedRange(minBoundedRange.z, maxBoundedRange.z, MAX_TOLERANCE)
         };
-        cachedPoints ??= new List<GrassData>();
+        cachedPoints ??= new List<CPUFoliage>();
         cachedPoints.Clear();
         if (data != null) {
             cachedPoints.AddRange(data);
         }
-        quantizedPoints ??= new Dictionary<QuantizedVector3, GrassData>();
+        quantizedPoints ??= new Dictionary<QuantizedVector3, CPUFoliage>();
         quantizedPoints.Clear();
         foreach (var d in cachedPoints) {
             quantizedPoints[BoundedRange.Quantize(d.position, boundedRanges)] = d;
@@ -170,7 +170,7 @@ public class FlockingChunk {
     public void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, Vector3 offset, float rotation) {
         var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
         bool shouldRender = !quantizedPoints.ContainsKey(quantizedPoint);
-        quantizedPoints[quantizedPoint] = new GrassData {
+        quantizedPoints[quantizedPoint] = new CPUFoliage {
             position = BoundedRange.Dequantize(quantizedPoint, boundedRanges),
             rotation = Quaternion.FromToRotation(Vector3.forward, normal) * Quaternion.AngleAxis(rotation, Vector3.forward),
             scale = scale.magnitude,
@@ -190,7 +190,7 @@ public class FlockingChunk {
             return;
         }
 
-        int indexCount = (int)meshes[0].GetIndexCount(0);
+        int indexCount = (int)foliagePack.foliages[0].mesh.GetIndexCount(0);
         Graphics.RenderPrimitives(renderParams, MeshTopology.Triangles, indexCount, quantizedPoints.Count);
     }
 
@@ -211,17 +211,17 @@ public class FlockingChunk {
         if (foliageChunks != null && foliageChunks.count < quantizedPoints.Count) {
             foliageChunks.Release();
             foliageChunks = new GraphicsBuffer(GraphicsBuffer.Target.Structured, quantizedPoints.Count*2, sizeof(float) * 16 + sizeof(int));
-            cachedMatricies = new FoliageChunk[quantizedPoints.Count * 2];
+            cachedMatricies = new GPUFoliage[quantizedPoints.Count * 2];
         } else if (foliageChunks == null || !foliageChunks.IsValid()) {
             foliageChunks?.Release();
             foliageChunks = new GraphicsBuffer(GraphicsBuffer.Target.Structured, quantizedPoints.Count, sizeof(float) * 16 + sizeof(int));
-            cachedMatricies = new FoliageChunk[quantizedPoints.Count];
+            cachedMatricies = new GPUFoliage[quantizedPoints.Count];
         }
         Vector3 center = Vector3.Lerp(minBoundedRange,maxBoundedRange, 0.5f);
         int i = 0;
         foreach (var pair in quantizedPoints) {
             Vector3 position = pair.Value.position + pair.Value.offset;
-            cachedMatricies[i] = new FoliageChunk() {
+            cachedMatricies[i] = new GPUFoliage() {
                 matrix = Matrix4x4.TRS(position, pair.Value.rotation, Vector3.one*pair.Value.scale),
                 meshIndex = pair.Value.index,
             };
@@ -238,9 +238,9 @@ public class FlockingChunk {
         lightProbeVolume.transform.localScale = maxBoundedRange - minBoundedRange;
         materialPropertyBlock ??= new MaterialPropertyBlock();
         materialPropertyBlock.SetBuffer("_GrassMat", foliageChunks);
-        renderParams = new RenderParams(grassMaterial) {
+        renderParams = new RenderParams(foliagePack.material) {
             worldBounds = new Bounds(center, Vector3.one+(maxBoundedRange-minBoundedRange)),
-            material = grassMaterial,
+            material = foliagePack.material,
             matProps = materialPropertyBlock,
             lightProbeUsage = LightProbeUsage.UseProxyVolume,
             reflectionProbeUsage = ReflectionProbeUsage.BlendProbes,
@@ -259,7 +259,7 @@ public class FlockingChunk {
             return;
         }
         if (data == null) {
-            data = new List<GrassData>(quantizedPoints.Values);
+            data = new List<CPUFoliage>(quantizedPoints.Values);
         } else {
             data.Clear();
             data.AddRange(quantizedPoints.Values);
@@ -267,7 +267,7 @@ public class FlockingChunk {
     }
 
     public void OnAfterDeserialize() {
-        quantizedPoints ??= new Dictionary<QuantizedVector3, GrassData>();
+        quantizedPoints ??= new Dictionary<QuantizedVector3, CPUFoliage>();
         quantizedPoints.Clear();
         boundedRanges = new[] {
             new BoundedRange(minBoundedRange.x, maxBoundedRange.x, MAX_TOLERANCE),
@@ -281,7 +281,7 @@ public class FlockingChunk {
 
     public Vector3? GetScale(Vector3 point) {
         var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
-        if (!quantizedPoints.TryGetValue(quantizedPoint, out GrassData data)) {
+        if (!quantizedPoints.TryGetValue(quantizedPoint, out CPUFoliage data)) {
             return null;
         }
         return Vector3.one*data.scale;
