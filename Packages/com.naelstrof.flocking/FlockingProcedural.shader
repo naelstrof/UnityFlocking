@@ -7,7 +7,6 @@ Shader "FlockingProcedural"
 		[HideInInspector] _AlphaCutoff("Alpha Cutoff ", Range(0, 1)) = 0.5
 		_BaseColorMap("BaseColorMap", 2D) = "white" {}
 		_NormalBlend("NormalBlend", Range( 0 , 1)) = 0
-		[HideInInspector] _texcoord( "", 2D ) = "white" {}
 
 		[HideInInspector] _RenderQueueType("Render Queue Type", Float) = 1
 		[HideInInspector][ToggleUI] _AddPrecomputedVelocity("Add Precomputed Velocity", Float) = 1
@@ -44,7 +43,7 @@ Shader "FlockingProcedural"
 		[HideInInspector][ToggleUI] _TransparentBackfaceEnable("Transparent Backface Enable", Float) = 0
 		[HideInInspector][ToggleUI] _AlphaCutoffEnable("Alpha Cutoff Enable", Float) = 0
 		[HideInInspector][ToggleUI] _UseShadowThreshold("Use Shadow Threshold", Float) = 1
-		[HideInInspector][ToggleUI] _DoubleSidedEnable("Double Sided Enable", Float) = 0
+		[HideInInspector][ToggleUI] _DoubleSidedEnable("Double Sided Enable", Float) = 1
 		[HideInInspector][Enum(Flip, 0, Mirror, 1, None, 2)] _DoubleSidedNormalMode("Double Sided Normal Mode", Float) = 2
 		[HideInInspector] _DoubleSidedConstants("DoubleSidedConstants", Vector) = (1,1,-1,0)
 
@@ -316,7 +315,9 @@ Shader "FlockingProcedural"
 		#endif //ASE_TESS_FUNCS
 		ENDHLSL
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
 		{
 			
@@ -339,17 +340,17 @@ Shader "FlockingProcedural"
 			ColorMask [_LightLayersMaskBuffer5] 5
 
 			HLSLPROGRAM
-            #pragma shader_feature_local _ _DOUBLESIDED_ON
             #pragma shader_feature_local_fragment _ _DISABLE_DECALS
-            #pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
             #define _SPECULAR_OCCLUSION_FROM_AO 1
-            #pragma multi_compile_instancing
             #pragma instancing_options renderinglayer
-            #define ASE_ABSOLUTE_VERTEX_POS 1
             #pragma shader_feature_local _ _ALPHATEST_ON
+            #define ASE_NEED_CULLFACE 1
+            #pragma shader_feature_local _ _DOUBLESIDED_ON
             #define _ALPHATEST_SHADOW_ON 1
+            #define ASE_ABSOLUTE_VERTEX_POS 1
+            #define _AMBIENT_OCCLUSION 1
             #define HAVE_MESH_MODIFICATION
-            #define ASE_SRP_VERSION 140008
+            #define ASE_SRP_VERSION 140010
 
             #pragma multi_compile _ DOTS_INSTANCING_ON
 
@@ -440,7 +441,6 @@ Shader "FlockingProcedural"
             #endif
 
 			CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -505,6 +505,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -521,9 +535,11 @@ Shader "FlockingProcedural"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Decal/DecalUtilities.hlsl"
 			#include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Lit/LitDecalData.hlsl"
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma multi_compile_instancing
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -533,6 +549,7 @@ Shader "FlockingProcedural"
 				float4 tangentOS : TANGENT;
 				float4 uv1 : TEXCOORD1;
 				float4 uv2 : TEXCOORD2;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
@@ -546,6 +563,7 @@ Shader "FlockingProcedural"
 				float4 uv1 : TEXCOORD3;
 				float4 uv2 : TEXCOORD4;
 				float4 ase_texcoord5 : TEXCOORD5;
+				float4 ase_texcoord6 : TEXCOORD6;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
@@ -554,9 +572,23 @@ Shader "FlockingProcedural"
 			};
 
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.ase_texcoord.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -798,7 +830,7 @@ Shader "FlockingProcedural"
 				PostInitBuiltinData(V, posInput, surfaceData, builtinData);
 			}
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh, uint ase_instanceId : SV_InstanceId )
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh )
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS;
 
@@ -806,14 +838,28 @@ Shader "FlockingProcedural"
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO( outputPackedVaryingsMeshToPS );
 
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord5.xy = inputMesh.ase_texcoord.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord5.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord6 = inputMesh.ase_texcoord;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord5.zw = 0;
@@ -823,7 +869,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -855,6 +901,7 @@ Shader "FlockingProcedural"
 				float4 tangentOS : TANGENT;
 				float4 uv1 : TEXCOORD1;
 				float4 uv2 : TEXCOORD2;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 
 				UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -876,6 +923,7 @@ Shader "FlockingProcedural"
 				o.tangentOS = v.tangentOS;
 				o.uv1 = v.uv1;
 				o.uv2 = v.uv2;
+				o.ase_vertexID = v.ase_vertexID;
 				o.ase_texcoord = v.ase_texcoord;
 				return o;
 			}
@@ -923,6 +971,7 @@ Shader "FlockingProcedural"
 				o.tangentOS = patch[0].tangentOS * bary.x + patch[1].tangentOS * bary.y + patch[2].tangentOS * bary.z;
 				o.uv1 = patch[0].uv1 * bary.x + patch[1].uv1 * bary.y + patch[2].uv1 * bary.z;
 				o.uv2 = patch[0].uv2 * bary.x + patch[1].uv2 * bary.y + patch[2].uv2 * bary.z;
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				o.ase_texcoord = patch[0].ase_texcoord * bary.x + patch[1].ase_texcoord * bary.y + patch[2].ase_texcoord * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
@@ -935,9 +984,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -980,8 +1029,8 @@ Shader "FlockingProcedural"
 				BuiltinData builtinData;
 
 				GlobalSurfaceDescription surfaceDescription = (GlobalSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord5.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord5.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.BaseColor = tex2DNode11.rgb;
 				surfaceDescription.Normal = float3( 0, 0, 1 );
@@ -995,7 +1044,7 @@ Shader "FlockingProcedural"
 
 				surfaceDescription.Emission = 0;
 				surfaceDescription.Smoothness = 0.25;
-				surfaceDescription.Occlusion = 1;
+				surfaceDescription.Occlusion = 1.0;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
@@ -1075,7 +1124,9 @@ Shader "FlockingProcedural"
 			ENDHLSL
 		}
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
 		{
 			
@@ -1085,17 +1136,17 @@ Shader "FlockingProcedural"
 			Cull Off
 
 			HLSLPROGRAM
-			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
-			#pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
-			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define ASE_NEED_CULLFACE 1
+			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
+			#define ASE_ABSOLUTE_VERTEX_POS 1
+			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
-			#define ASE_SRP_VERSION 140008
+			#define ASE_SRP_VERSION 140010
 
 			#pragma shader_feature _ EDITOR_VISUALIZATION
 			#pragma multi_compile _ DOTS_INSTANCING_ON
@@ -1179,7 +1230,6 @@ Shader "FlockingProcedural"
             #endif
 
 			CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -1244,6 +1294,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -1270,9 +1334,11 @@ Shader "FlockingProcedural"
 			#include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/VisualEffectVertex.hlsl"
         	#endif
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma multi_compile_instancing
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -1284,7 +1350,7 @@ Shader "FlockingProcedural"
 				float4 uv1 : TEXCOORD1;
 				float4 uv2 : TEXCOORD2;
 				float4 uv3 : TEXCOORD3;
-				
+				uint ase_vertexID : SV_VertexID;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
 
@@ -1296,15 +1362,30 @@ Shader "FlockingProcedural"
 				float4 LightCoord : TEXCOORD1;
 				#endif
 				float4 ase_texcoord2 : TEXCOORD2;
+				float4 ase_texcoord3 : TEXCOORD3;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
 				FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC;
 				#endif
 			};
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.uv0.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -1546,21 +1627,35 @@ Shader "FlockingProcedural"
                 PostInitBuiltinData(V, posInput, surfaceData, builtinData);
 			}
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh , uint ase_instanceId : SV_InstanceId )
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh  )
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS;
 
 				UNITY_SETUP_INSTANCE_ID(inputMesh);
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord2.xy = inputMesh.uv0.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord2.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord3 = inputMesh.uv0;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord2.zw = 0;
@@ -1570,7 +1665,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -1605,7 +1700,8 @@ Shader "FlockingProcedural"
 				float4 uv1 : TEXCOORD1;
 				float4 uv2 : TEXCOORD2;
 				float4 uv3 : TEXCOORD3;
-				
+				uint ase_vertexID : SV_VertexID;
+
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
 
@@ -1627,7 +1723,7 @@ Shader "FlockingProcedural"
 				o.uv1 = v.uv1;
 				o.uv2 = v.uv2;
 				o.uv3 = v.uv3;
-				
+				o.ase_vertexID = v.ase_vertexID;
 				return o;
 			}
 
@@ -1676,7 +1772,7 @@ Shader "FlockingProcedural"
 				o.uv1 = patch[0].uv1 * bary.x + patch[1].uv1 * bary.y + patch[2].uv1 * bary.z;
 				o.uv2 = patch[0].uv2 * bary.x + patch[1].uv2 * bary.y + patch[2].uv2 * bary.z;
 				o.uv3 = patch[0].uv3 * bary.x + patch[1].uv3 * bary.y + patch[2].uv3 * bary.z;
-				
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
 				for (int i = 0; i < 3; ++i)
@@ -1688,9 +1784,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -1717,8 +1813,8 @@ Shader "FlockingProcedural"
 				SurfaceData surfaceData;
 				BuiltinData builtinData;
 				GlobalSurfaceDescription surfaceDescription = (GlobalSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord2.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord2.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.BaseColor = tex2DNode11.rgb;
 				surfaceDescription.Normal = float3( 0, 0, 1 );
@@ -1732,7 +1828,7 @@ Shader "FlockingProcedural"
 
 				surfaceDescription.Emission = 0;
 				surfaceDescription.Smoothness = 0.25;
-				surfaceDescription.Occlusion = 1;
+				surfaceDescription.Occlusion = 1.0;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
@@ -1801,7 +1897,9 @@ Shader "FlockingProcedural"
 			ENDHLSL
 		}
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
 		{
 			
@@ -1815,17 +1913,17 @@ Shader "FlockingProcedural"
 			ColorMask 0
 
 			HLSLPROGRAM
-			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
-			#pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
-			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define ASE_NEED_CULLFACE 1
+			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
+			#define ASE_ABSOLUTE_VERTEX_POS 1
+			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
-			#define ASE_SRP_VERSION 140008
+			#define ASE_SRP_VERSION 140010
 
 			#pragma multi_compile _ DOTS_INSTANCING_ON
 
@@ -1909,7 +2007,6 @@ Shader "FlockingProcedural"
             #endif
 
 			CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -1974,6 +2071,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -1994,9 +2105,11 @@ Shader "FlockingProcedural"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/VisualEffectVertex.hlsl"
         	#endif
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma multi_compile_instancing
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -2004,6 +2117,7 @@ Shader "FlockingProcedural"
 				float3 positionOS : POSITION;
 				float3 normalOS : NORMAL;
 				float4 tangentOS : TANGENT;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
@@ -2013,6 +2127,7 @@ Shader "FlockingProcedural"
 				SV_POSITION_QUALIFIERS float4 positionCS : SV_Position;
 				float3 positionRWS : TEXCOORD0;
 				float4 ase_texcoord1 : TEXCOORD1;
+				float4 ase_texcoord2 : TEXCOORD2;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
@@ -2020,9 +2135,23 @@ Shader "FlockingProcedural"
 				#endif
 			};
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.ase_texcoord.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -2213,21 +2342,35 @@ Shader "FlockingProcedural"
                 PostInitBuiltinData(V, posInput, surfaceData, builtinData);
 			}
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh , uint ase_instanceId : SV_InstanceId)
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh )
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS;
 				UNITY_SETUP_INSTANCE_ID(inputMesh);
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO( outputPackedVaryingsMeshToPS );
 
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = inputMesh.ase_texcoord.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord2 = inputMesh.ase_texcoord;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord1.zw = 0;
@@ -2237,7 +2380,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -2260,6 +2403,7 @@ Shader "FlockingProcedural"
 				float3 positionOS : INTERNALTESSPOS;
 				float3 normalOS : NORMAL;
 				float4 tangentOS : TANGENT;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 
 				UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -2279,6 +2423,7 @@ Shader "FlockingProcedural"
 				o.positionOS = v.positionOS;
 				o.normalOS = v.normalOS;
 				o.tangentOS = v.tangentOS;
+				o.ase_vertexID = v.ase_vertexID;
 				o.ase_texcoord = v.ase_texcoord;
 				return o;
 			}
@@ -2324,6 +2469,7 @@ Shader "FlockingProcedural"
 				o.positionOS = patch[0].positionOS * bary.x + patch[1].positionOS * bary.y + patch[2].positionOS * bary.z;
 				o.normalOS = patch[0].normalOS * bary.x + patch[1].normalOS * bary.y + patch[2].normalOS * bary.z;
 				o.tangentOS = patch[0].tangentOS * bary.x + patch[1].tangentOS * bary.y + patch[2].tangentOS * bary.z;
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				o.ase_texcoord = patch[0].ase_texcoord * bary.x + patch[1].ase_texcoord * bary.y + patch[2].ase_texcoord * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
@@ -2336,9 +2482,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -2403,8 +2549,8 @@ Shader "FlockingProcedural"
 				float3 V = GetWorldSpaceNormalizeViewDir(input.positionRWS);
 
 				AlphaSurfaceDescription surfaceDescription = (AlphaSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord1.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord1.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.Alpha = tex2DNode11.a;
 
@@ -2452,7 +2598,9 @@ Shader "FlockingProcedural"
 			ENDHLSL
 		}
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
 		{
 			
@@ -2462,17 +2610,17 @@ Shader "FlockingProcedural"
 			Cull Off
 
 			HLSLPROGRAM
-			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
-			#pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
-			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define ASE_NEED_CULLFACE 1
+			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
+			#define ASE_ABSOLUTE_VERTEX_POS 1
+			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
-			#define ASE_SRP_VERSION 140008
+			#define ASE_SRP_VERSION 140010
 
 			#pragma editor_sync_compilation
             #pragma multi_compile _ DOTS_INSTANCING_ON
@@ -2555,7 +2703,6 @@ Shader "FlockingProcedural"
             #endif
 
 			CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -2620,6 +2767,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -2641,9 +2802,11 @@ Shader "FlockingProcedural"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/VisualEffectVertex.hlsl"
         	#endif
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma multi_compile_instancing
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -2651,6 +2814,7 @@ Shader "FlockingProcedural"
 				float3 positionOS : POSITION;
 				float3 normalOS : NORMAL;
 				float4 tangentOS : TANGENT;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
@@ -2660,6 +2824,7 @@ Shader "FlockingProcedural"
 				SV_POSITION_QUALIFIERS float4 positionCS : SV_Position;
 				float3 positionRWS : TEXCOORD0;
 				float4 ase_texcoord1 : TEXCOORD1;
+				float4 ase_texcoord2 : TEXCOORD2;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
@@ -2667,9 +2832,23 @@ Shader "FlockingProcedural"
 				#endif
 			};
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.ase_texcoord.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -2863,21 +3042,35 @@ Shader "FlockingProcedural"
                 PostInitBuiltinData(V, posInput, surfaceData, builtinData);
 			}
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh , uint ase_instanceId : SV_InstanceId)
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh )
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS;
 				UNITY_SETUP_INSTANCE_ID(inputMesh);
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO( outputPackedVaryingsMeshToPS );
 
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = inputMesh.ase_texcoord.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord2 = inputMesh.ase_texcoord;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord1.zw = 0;
@@ -2887,7 +3080,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -2910,6 +3103,7 @@ Shader "FlockingProcedural"
 				float3 positionOS : INTERNALTESSPOS;
 				float3 normalOS : NORMAL;
 				float4 tangentOS : TANGENT;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 
 				UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -2929,6 +3123,7 @@ Shader "FlockingProcedural"
 				o.positionOS = v.positionOS;
 				o.normalOS = v.normalOS;
 				o.tangentOS = v.tangentOS;
+				o.ase_vertexID = v.ase_vertexID;
 				o.ase_texcoord = v.ase_texcoord;
 				return o;
 			}
@@ -2974,6 +3169,7 @@ Shader "FlockingProcedural"
 				o.positionOS = patch[0].positionOS * bary.x + patch[1].positionOS * bary.y + patch[2].positionOS * bary.z;
 				o.normalOS = patch[0].normalOS * bary.x + patch[1].normalOS * bary.y + patch[2].normalOS * bary.z;
 				o.tangentOS = patch[0].tangentOS * bary.x + patch[1].tangentOS * bary.y + patch[2].tangentOS * bary.z;
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				o.ase_texcoord = patch[0].ase_texcoord * bary.x + patch[1].ase_texcoord * bary.y + patch[2].ase_texcoord * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
@@ -2986,9 +3182,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -3035,8 +3231,8 @@ Shader "FlockingProcedural"
 				float3 V = GetWorldSpaceNormalizeViewDir(input.positionRWS);
 
 				SceneSurfaceDescription surfaceDescription = (SceneSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord1.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord1.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.Alpha = tex2DNode11.a;
 
@@ -3061,7 +3257,9 @@ Shader "FlockingProcedural"
 			ENDHLSL
 		}
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
 		{
 			
@@ -3081,17 +3279,17 @@ Shader "FlockingProcedural"
 
 
 			HLSLPROGRAM
-			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
-			#pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
-			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define ASE_NEED_CULLFACE 1
+			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
+			#define ASE_ABSOLUTE_VERTEX_POS 1
+			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
-			#define ASE_SRP_VERSION 140008
+			#define ASE_SRP_VERSION 140010
 
 			#pragma multi_compile _ DOTS_INSTANCING_ON
 
@@ -3176,7 +3374,6 @@ Shader "FlockingProcedural"
             #endif
 
 			CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -3241,6 +3438,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -3261,9 +3472,11 @@ Shader "FlockingProcedural"
 			#include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/VisualEffectVertex.hlsl"
         	#endif
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma multi_compile_instancing
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -3271,6 +3484,7 @@ Shader "FlockingProcedural"
 				float3 positionOS : POSITION;
 				float3 normalOS : NORMAL;
 				float4 tangentOS : TANGENT;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
@@ -3282,6 +3496,7 @@ Shader "FlockingProcedural"
 				float3 normalWS : TEXCOORD1;
 				float4 tangentWS : TEXCOORD2;
 				float4 ase_texcoord3 : TEXCOORD3;
+				float4 ase_texcoord4 : TEXCOORD4;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
@@ -3289,9 +3504,23 @@ Shader "FlockingProcedural"
 				#endif
 			};
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.ase_texcoord.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -3491,7 +3720,7 @@ Shader "FlockingProcedural"
 				#include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Decal/DecalPrepassBuffer.hlsl"
 			#endif
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh , uint ase_instanceId : SV_InstanceId)
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh )
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS;
 
@@ -3499,14 +3728,28 @@ Shader "FlockingProcedural"
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO( outputPackedVaryingsMeshToPS );
 
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = inputMesh.ase_texcoord.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord4 = inputMesh.ase_texcoord;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord3.zw = 0;
@@ -3516,7 +3759,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -3544,6 +3787,7 @@ Shader "FlockingProcedural"
 				float3 positionOS : INTERNALTESSPOS;
 				float3 normalOS : NORMAL;
 				float4 tangentOS : TANGENT;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 
 				UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -3563,6 +3807,7 @@ Shader "FlockingProcedural"
 				o.positionOS = v.positionOS;
 				o.normalOS = v.normalOS;
 				o.tangentOS = v.tangentOS;
+				o.ase_vertexID = v.ase_vertexID;
 				o.ase_texcoord = v.ase_texcoord;
 				return o;
 			}
@@ -3608,6 +3853,7 @@ Shader "FlockingProcedural"
 				o.positionOS = patch[0].positionOS * bary.x + patch[1].positionOS * bary.y + patch[2].positionOS * bary.z;
 				o.normalOS = patch[0].normalOS * bary.x + patch[1].normalOS * bary.y + patch[2].normalOS * bary.z;
 				o.tangentOS = patch[0].tangentOS * bary.x + patch[1].tangentOS * bary.y + patch[2].tangentOS * bary.z;
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				o.ase_texcoord = patch[0].ase_texcoord * bary.x + patch[1].ase_texcoord * bary.y + patch[2].ase_texcoord * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
@@ -3620,9 +3866,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -3690,8 +3936,8 @@ Shader "FlockingProcedural"
 				float3 V = GetWorldSpaceNormalizeViewDir(input.positionRWS);
 
 				SmoothSurfaceDescription surfaceDescription = (SmoothSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord3.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord3.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.Normal = float3( 0, 0, 1 );
 				surfaceDescription.Smoothness = 0.25;
@@ -3745,7 +3991,9 @@ Shader "FlockingProcedural"
 			ENDHLSL
 		}
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
 		{
 			
@@ -3766,17 +4014,17 @@ Shader "FlockingProcedural"
 
 
 			HLSLPROGRAM
-			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
-			#pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
-			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define ASE_NEED_CULLFACE 1
+			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
+			#define ASE_ABSOLUTE_VERTEX_POS 1
+			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
-			#define ASE_SRP_VERSION 140008
+			#define ASE_SRP_VERSION 140010
 
 			#pragma multi_compile _ DOTS_INSTANCING_ON
 
@@ -3861,7 +4109,6 @@ Shader "FlockingProcedural"
             #endif
 
 			CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -3926,6 +4173,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -3946,9 +4207,11 @@ Shader "FlockingProcedural"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/VisualEffectVertex.hlsl"
         	#endif
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma multi_compile_instancing
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -3958,6 +4221,7 @@ Shader "FlockingProcedural"
 				float4 tangentOS : TANGENT;
 				float3 previousPositionOS : TEXCOORD4;
 				float3 precomputedVelocity : TEXCOORD5;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
@@ -3969,6 +4233,7 @@ Shader "FlockingProcedural"
 				float3 vpassInterpolators0 : TEXCOORD1; //interpolators0
 				float3 vpassInterpolators1 : TEXCOORD2; //interpolators1
 				float4 ase_texcoord3 : TEXCOORD3;
+				float4 ase_texcoord4 : TEXCOORD4;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
@@ -3976,9 +4241,23 @@ Shader "FlockingProcedural"
 				#endif
 			};
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.ase_texcoord.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -4174,17 +4453,31 @@ Shader "FlockingProcedural"
                 PostInitBuiltinData(V, posInput, surfaceData, builtinData);
 			}
 
-			AttributesMesh ApplyMeshModification(AttributesMesh inputMesh, float3 timeParameters, inout PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS, uint ase_instanceId : SV_InstanceId )
+			AttributesMesh ApplyMeshModification(AttributesMesh inputMesh, float3 timeParameters, inout PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS )
 			{
 				_TimeParameters.xyz = timeParameters;
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = inputMesh.ase_texcoord.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord4 = inputMesh.ase_texcoord;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord3.zw = 0;
@@ -4194,7 +4487,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -4206,7 +4499,7 @@ Shader "FlockingProcedural"
 				return inputMesh;
 			}
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh, uint ase_instanceID : SV_InstanceID)
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh)
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS = (PackedVaryingsMeshToPS)0;
 				AttributesMesh defaultMesh = inputMesh;
@@ -4215,7 +4508,7 @@ Shader "FlockingProcedural"
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO( outputPackedVaryingsMeshToPS );
 
-				inputMesh = ApplyMeshModification( inputMesh, _TimeParameters.xyz, outputPackedVaryingsMeshToPS, ase_instanceID);
+				inputMesh = ApplyMeshModification( inputMesh, _TimeParameters.xyz, outputPackedVaryingsMeshToPS);
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
 				float3 normalWS = TransformObjectToWorldNormal(inputMesh.normalOS);
@@ -4244,7 +4537,7 @@ Shader "FlockingProcedural"
 						previousMesh.positionOS = effectivePositionOS ;
 						PackedVaryingsMeshToPS test = (PackedVaryingsMeshToPS)0;
 						float3 curTime = _TimeParameters.xyz;
-						previousMesh = ApplyMeshModification(previousMesh, _LastTimeParameters.xyz, test, ase_instanceID);
+						previousMesh = ApplyMeshModification(previousMesh, _LastTimeParameters.xyz, test);
 						_TimeParameters.xyz = curTime;
 						float3 previousPositionRWS = TransformPreviousObjectToWorld(previousMesh.positionOS);
 					#else
@@ -4291,6 +4584,7 @@ Shader "FlockingProcedural"
 				float4 tangentOS : TANGENT;
 				float3 previousPositionOS : TEXCOORD4;
 				float3 precomputedVelocity : TEXCOORD5;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 
 				UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -4314,6 +4608,7 @@ Shader "FlockingProcedural"
 				#if defined (_ADD_PRECOMPUTED_VELOCITY)
 				o.precomputedVelocity = v.precomputedVelocity;
 				#endif
+				o.ase_vertexID = v.ase_vertexID;
 				o.ase_texcoord = v.ase_texcoord;
 				return o;
 			}
@@ -4363,6 +4658,7 @@ Shader "FlockingProcedural"
 				#if defined (_ADD_PRECOMPUTED_VELOCITY)
 					o.precomputedVelocity = patch[0].precomputedVelocity * bary.x + patch[1].precomputedVelocity * bary.y + patch[2].precomputedVelocity * bary.z;
 				#endif
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				o.ase_texcoord = patch[0].ase_texcoord * bary.x + patch[1].ase_texcoord * bary.y + patch[2].ase_texcoord * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
@@ -4375,9 +4671,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -4429,8 +4725,8 @@ Shader "FlockingProcedural"
 				BuiltinData builtinData;
 
 				SmoothSurfaceDescription surfaceDescription = (SmoothSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord3.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord3.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.Normal = float3( 0, 0, 1 );
 				surfaceDescription.Smoothness = 0.25;
@@ -4491,7 +4787,9 @@ Shader "FlockingProcedural"
 			ENDHLSL
 		}
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
 		{
 			
@@ -4518,17 +4816,17 @@ Shader "FlockingProcedural"
             ColorMask [_ColorMaskTransparentVelTwo] 2
 
 			HLSLPROGRAM
-			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
-			#pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
-			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
-			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define ASE_NEED_CULLFACE 1
+			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
+			#define ASE_ABSOLUTE_VERTEX_POS 1
+			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
-			#define ASE_SRP_VERSION 140008
+			#define ASE_SRP_VERSION 140010
 
 			#pragma multi_compile _ DOTS_INSTANCING_ON
 
@@ -4629,7 +4927,6 @@ Shader "FlockingProcedural"
             #endif
 
 			CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -4694,6 +4991,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -4717,9 +5028,11 @@ Shader "FlockingProcedural"
         	#include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/VisualEffectVertex.hlsl"
         	#endif
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma multi_compile_instancing
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -4731,6 +5044,7 @@ Shader "FlockingProcedural"
 				float4 uv2 : TEXCOORD2;
 				float3 previousPositionOS : TEXCOORD4;
 				float3 precomputedVelocity : TEXCOORD5;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
@@ -4748,6 +5062,7 @@ Shader "FlockingProcedural"
 					float3 vpassPreviousPositionCS : TEXCOORD6;
 				#endif
 				float4 ase_texcoord7 : TEXCOORD7;
+				float4 ase_texcoord8 : TEXCOORD8;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
@@ -4755,9 +5070,23 @@ Shader "FlockingProcedural"
 				#endif
 			};
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.ase_texcoord.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -4998,17 +5327,31 @@ Shader "FlockingProcedural"
 				PostInitBuiltinData(V, posInput, surfaceData, builtinData);
 			}
 
-			AttributesMesh ApplyMeshModification(AttributesMesh inputMesh, float3 timeParameters, inout PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS, uint ase_instanceId : SV_InstanceId )
+			AttributesMesh ApplyMeshModification(AttributesMesh inputMesh, float3 timeParameters, inout PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS )
 			{
 				_TimeParameters.xyz = timeParameters;
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = inputMesh.ase_texcoord.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord8 = inputMesh.ase_texcoord;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord7.zw = 0;
@@ -5018,7 +5361,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -5030,7 +5373,7 @@ Shader "FlockingProcedural"
 				return inputMesh;
 			}
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh, uint ase_instanceID : SV_InstanceID)
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh)
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS = (PackedVaryingsMeshToPS)0;
 				AttributesMesh defaultMesh = inputMesh;
@@ -5039,7 +5382,7 @@ Shader "FlockingProcedural"
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO( outputPackedVaryingsMeshToPS );
 
-				inputMesh = ApplyMeshModification( inputMesh, _TimeParameters.xyz, outputPackedVaryingsMeshToPS, ase_instanceID);
+				inputMesh = ApplyMeshModification( inputMesh, _TimeParameters.xyz, outputPackedVaryingsMeshToPS);
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
 				float3 normalWS = TransformObjectToWorldNormal(inputMesh.normalOS);
@@ -5067,7 +5410,7 @@ Shader "FlockingProcedural"
 						previousMesh.positionOS = effectivePositionOS ;
 						PackedVaryingsMeshToPS test = (PackedVaryingsMeshToPS)0;
 						float3 curTime = _TimeParameters.xyz;
-						previousMesh = ApplyMeshModification(previousMesh, _LastTimeParameters.xyz, test, ase_instanceID);
+						previousMesh = ApplyMeshModification(previousMesh, _LastTimeParameters.xyz, test);
 						_TimeParameters.xyz = curTime;
 						float3 previousPositionRWS = TransformPreviousObjectToWorld(previousMesh.positionOS);
 					#else
@@ -5110,6 +5453,7 @@ Shader "FlockingProcedural"
 				float4 tangentOS : TANGENT;
 				float4 uv1 : TEXCOORD1;
 				float4 uv2 : TEXCOORD2;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 
 				UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -5131,6 +5475,7 @@ Shader "FlockingProcedural"
 				o.tangentOS = v.tangentOS;
 				o.uv1 = v.uv1;
 				o.uv2 = v.uv2;
+				o.ase_vertexID = v.ase_vertexID;
 				o.ase_texcoord = v.ase_texcoord;
 				return o;
 			}
@@ -5178,6 +5523,7 @@ Shader "FlockingProcedural"
 				o.tangentOS = patch[0].tangentOS * bary.x + patch[1].tangentOS * bary.y + patch[2].tangentOS * bary.z;
 				o.uv1 = patch[0].uv1 * bary.x + patch[1].uv1 * bary.y + patch[2].uv1 * bary.z;
 				o.uv2 = patch[0].uv2 * bary.x + patch[1].uv2 * bary.y + patch[2].uv2 * bary.z;
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				o.ase_texcoord = patch[0].ase_texcoord * bary.x + patch[1].ase_texcoord * bary.y + patch[2].ase_texcoord * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
@@ -5190,9 +5536,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -5275,8 +5621,8 @@ Shader "FlockingProcedural"
 				float3 V = GetWorldSpaceNormalizeViewDir(input.positionRWS);
 
 				GlobalSurfaceDescription surfaceDescription = (GlobalSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord7.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord7.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.BaseColor = tex2DNode11.rgb;
 				surfaceDescription.Normal = float3( 0, 0, 1 );
@@ -5290,7 +5636,7 @@ Shader "FlockingProcedural"
 
 				surfaceDescription.Emission = 0;
 				surfaceDescription.Smoothness = 0.25;
-				surfaceDescription.Occlusion = 1;
+				surfaceDescription.Occlusion = 1.0;
 				surfaceDescription.Alpha = tex2DNode11.a;
 
 				#ifdef _ALPHATEST_ON
@@ -5456,7 +5802,9 @@ Shader "FlockingProcedural"
 			ENDHLSL
 		}
 
-		
+		UsePass "Hidden/Nature/Terrain/Utilities/PICKING"
+	UsePass "Hidden/Nature/Terrain/Utilities/SELECTION"
+
 		Pass
         {
 			
@@ -5466,17 +5814,18 @@ Shader "FlockingProcedural"
             Cull [_CullMode]
 
             HLSLPROGRAM
-			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#pragma shader_feature_local_fragment _ _DISABLE_DECALS
-			#pragma shader_feature_local_fragment _ _DISABLE_SSR_TRANSPARENT
 			#define _SPECULAR_OCCLUSION_FROM_AO 1
 			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
-			#define ASE_ABSOLUTE_VERTEX_POS 1
 			#pragma shader_feature_local _ _ALPHATEST_ON
+			#define ASE_NEED_CULLFACE 1
+			#pragma shader_feature_local _ _DOUBLESIDED_ON
 			#define _ALPHATEST_SHADOW_ON 1
+			#define ASE_ABSOLUTE_VERTEX_POS 1
+			#define _AMBIENT_OCCLUSION 1
 			#define HAVE_MESH_MODIFICATION
-			#define ASE_SRP_VERSION 140008
+			#define ASE_SRP_VERSION 140010
 
 			#pragma editor_sync_compilation
             #pragma multi_compile _ DOTS_INSTANCING_ON
@@ -5563,7 +5912,6 @@ Shader "FlockingProcedural"
             #endif
 	
             CBUFFER_START( UnityPerMaterial )
-			float4 _BaseColorMap_ST;
 			float _NormalBlend;
 			float4 _EmissionColor;
 			float _AlphaCutoff;
@@ -5628,6 +5976,20 @@ Shader "FlockingProcedural"
             #endif
 
 			sampler2D _BaseColorMap;
+			#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+				TEXTURE2D(_TerrainHeightmapTexture);//ASE Terrain Instancing
+				TEXTURE2D( _TerrainNormalmapTexture);//ASE Terrain Instancing
+				SAMPLER(sampler_TerrainNormalmapTexture);//ASE Terrain Instancing
+			#endif//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_START( Terrain )//ASE Terrain Instancing
+				UNITY_DEFINE_INSTANCED_PROP( float4, _TerrainPatchInstanceData )//ASE Terrain Instancing
+			UNITY_INSTANCING_BUFFER_END( Terrain)//ASE Terrain Instancing
+			CBUFFER_START( UnityTerrain)//ASE Terrain Instancing
+				#ifdef UNITY_INSTANCING_ENABLED//ASE Terrain Instancing
+					float4 _TerrainHeightmapRecipSize;//ASE Terrain Instancing
+					float4 _TerrainHeightmapScale;//ASE Terrain Instancing
+				#endif//ASE Terrain Instancing
+			CBUFFER_END//ASE Terrain Instancing
 
 
             #ifdef DEBUG_DISPLAY
@@ -5644,9 +6006,10 @@ Shader "FlockingProcedural"
 
 			#include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Decal/DecalUtilities.hlsl"
 
-			#define ASE_NEEDS_VERT_POSITION
+			#include "Packages/com.naelstrof.flocking/Flocking.cginc"
 			#define ASE_NEEDS_VERT_NORMAL
-			#include "Flocking.cginc"
+			#define ASE_NEEDS_VERT_POSITION
+			#pragma instancing_options assumeuniformscaling nomatrices nolightprobe nolightmap forwardadd
 
 
 			struct AttributesMesh
@@ -5658,6 +6021,7 @@ Shader "FlockingProcedural"
 				float4 uv2 : TEXCOORD2;
 				float3 previousPositionOS : TEXCOORD4;
 				float3 precomputedVelocity : TEXCOORD5;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
@@ -5675,6 +6039,7 @@ Shader "FlockingProcedural"
 					float3 vpassPreviousPositionCS : TEXCOORD6;
 				#endif
 				float4 ase_texcoord7 : TEXCOORD7;
+				float4 ase_texcoord8 : TEXCOORD8;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 				#if defined(SHADER_STAGE_FRAGMENT) && defined(ASE_NEED_CULLFACE)
@@ -5682,9 +6047,23 @@ Shader "FlockingProcedural"
 				#endif
 			};
 
-			float4x4 GrassInstance22( uint instanceID )
+			AttributesMesh ApplyMeshModification( AttributesMesh inputMesh )
 			{
-				return _GrassMat[instanceID];
+			#ifdef UNITY_INSTANCING_ENABLED
+				float2 patchVertex = inputMesh.positionOS.xy;
+				float4 instanceData = UNITY_ACCESS_INSTANCED_PROP( Terrain, _TerrainPatchInstanceData );
+				float2 sampleCoords = ( patchVertex.xy + instanceData.xy ) * instanceData.z;
+				float height = UnpackHeightmap( _TerrainHeightmapTexture.Load( int3( sampleCoords, 0 ) ) );
+				inputMesh.positionOS.xz = sampleCoords* _TerrainHeightmapScale.xz;
+				inputMesh.positionOS.y = height* _TerrainHeightmapScale.y;
+				#ifdef ENABLE_TERRAIN_PERPIXEL_NORMAL
+					inputMesh.normalOS = float3(0, 1, 0);
+				#else
+					inputMesh.normalOS = _TerrainNormalmapTexture.Load(int3(sampleCoords, 0)).rgb* 2 - 1;
+				#endif
+				inputMesh.ase_texcoord.xy = sampleCoords* _TerrainHeightmapRecipSize.zw;
+			#endif
+				return inputMesh;
 			}
 			
 
@@ -5744,17 +6123,31 @@ Shader "FlockingProcedural"
 
             }
 
-			AttributesMesh ApplyMeshModification(AttributesMesh inputMesh, float3 timeParameters, inout PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS, uint ase_instanceId : SV_InstanceId )
+			AttributesMesh ApplyMeshModification(AttributesMesh inputMesh, float3 timeParameters, inout PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS )
 			{
 				_TimeParameters.xyz = timeParameters;
-				uint instanceID22 =(uint)ase_instanceId;
-				float4x4 localGrassInstance22 = GrassInstance22( instanceID22 );
-				float4 appendResult54 = (float4(inputMesh.positionOS , 1.0));
+				inputMesh = ApplyMeshModification(inputMesh);
+				float localGetGrassInstance22 = ( 0.0 );
+				uint vertexID22 =(uint)inputMesh.ase_vertexID;
+				uint currInstanceId = 0;
+				#ifdef UNITY_INSTANCING_ENABLED
+				currInstanceId = unity_InstanceID;
+				#endif
+				uint instanceID22 =(uint)currInstanceId;
+				float4x4 grassMat22 = float4x4( 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 );
+				float3 localPosition22 = float3( 0,0,0 );
+				float3 localNormal22 = float3( 0,0,0 );
+				float2 uv22 = float2( 0,0 );
+				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
+				float4 appendResult54 = (float4(localPosition22 , 1.0));
 				
-				float3 lerpResult38 = lerp( mul( localGrassInstance22, float4( inputMesh.normalOS , 0.0 ) ).xyz , mul( localGrassInstance22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 lerpResult38 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
 				float3 normalizeResult40 = normalize( lerpResult38 );
 				
-				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = inputMesh.ase_texcoord.xy;
+				float2 vertexToFrag84 = uv22;
+				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = vertexToFrag84;
+				
+				outputPackedVaryingsMeshToPS.ase_texcoord8 = inputMesh.ase_texcoord;
 				
 				//setting value to unused interpolator channels and avoid initialization warnings
 				outputPackedVaryingsMeshToPS.ase_texcoord7.zw = 0;
@@ -5764,7 +6157,7 @@ Shader "FlockingProcedural"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue =  mul( localGrassInstance22, appendResult54 ).xyz;
+				float3 vertexValue =  mul( grassMat22, appendResult54 ).xyz;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -5776,7 +6169,7 @@ Shader "FlockingProcedural"
 				return inputMesh;
 			}
 
-			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh, uint ase_instanceID : SV_InstanceID)
+			PackedVaryingsMeshToPS VertexFunction(AttributesMesh inputMesh)
 			{
 				PackedVaryingsMeshToPS outputPackedVaryingsMeshToPS = (PackedVaryingsMeshToPS)0;
 				AttributesMesh defaultMesh = inputMesh;
@@ -5785,7 +6178,7 @@ Shader "FlockingProcedural"
 				UNITY_TRANSFER_INSTANCE_ID(inputMesh, outputPackedVaryingsMeshToPS);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO( outputPackedVaryingsMeshToPS );
 
-				inputMesh = ApplyMeshModification( inputMesh, _TimeParameters.xyz, outputPackedVaryingsMeshToPS, ase_instanceID);
+				inputMesh = ApplyMeshModification( inputMesh, _TimeParameters.xyz, outputPackedVaryingsMeshToPS);
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
 				float3 normalWS = TransformObjectToWorldNormal(inputMesh.normalOS);
@@ -5813,7 +6206,7 @@ Shader "FlockingProcedural"
 						previousMesh.positionOS = effectivePositionOS ;
 						PackedVaryingsMeshToPS test = (PackedVaryingsMeshToPS)0;
 						float3 curTime = _TimeParameters.xyz;
-						previousMesh = ApplyMeshModification(previousMesh, _LastTimeParameters.xyz, test, ase_instanceID);
+						previousMesh = ApplyMeshModification(previousMesh, _LastTimeParameters.xyz, test);
 						_TimeParameters.xyz = curTime;
 						float3 previousPositionRWS = TransformPreviousObjectToWorld(previousMesh.positionOS);
 					#else
@@ -5854,6 +6247,7 @@ Shader "FlockingProcedural"
 				float3 positionOS : INTERNALTESSPOS;
 				float3 normalOS : NORMAL;
 				float4 tangentOS : TANGENT;
+				uint ase_vertexID : SV_VertexID;
 				float4 ase_texcoord : TEXCOORD0;
 
 				UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -5873,6 +6267,7 @@ Shader "FlockingProcedural"
 				o.positionOS = v.positionOS;
 				o.normalOS = v.normalOS;
 				o.tangentOS = v.tangentOS;
+				o.ase_vertexID = v.ase_vertexID;
 				o.ase_texcoord = v.ase_texcoord;
 				return o;
 			}
@@ -5918,6 +6313,7 @@ Shader "FlockingProcedural"
 				o.positionOS = patch[0].positionOS * bary.x + patch[1].positionOS * bary.y + patch[2].positionOS * bary.z;
 				o.normalOS = patch[0].normalOS * bary.x + patch[1].normalOS * bary.y + patch[2].normalOS * bary.z;
 				o.tangentOS = patch[0].tangentOS * bary.x + patch[1].tangentOS * bary.y + patch[2].tangentOS * bary.z;
+				o.ase_vertexID = patch[0].ase_vertexID * bary.x + patch[1].ase_vertexID * bary.y + patch[2].ase_vertexID * bary.z;
 				o.ase_texcoord = patch[0].ase_texcoord * bary.x + patch[1].ase_texcoord * bary.y + patch[2].ase_texcoord * bary.z;
 				#if defined(ASE_PHONG_TESSELLATION)
 				float3 pp[3];
@@ -5930,9 +6326,9 @@ Shader "FlockingProcedural"
 				return VertexFunction(o);
 			}
 			#else
-			PackedVaryingsMeshToPS Vert ( AttributesMesh v, uint ase_instanceID : SV_InstanceID /*ase_vert_input*/ ) // ase_vert_input is ignored here so I have to manually fix.
+			PackedVaryingsMeshToPS Vert ( AttributesMesh v )
 			{
-				return VertexFunction( v, ase_instanceID );
+				return VertexFunction( v );
 			}
 			#endif
 
@@ -5997,8 +6393,8 @@ Shader "FlockingProcedural"
 				float3 V = GetWorldSpaceNormalizeViewDir(input.positionRWS);
 
 				PickingSurfaceDescription surfaceDescription = (PickingSurfaceDescription)0;
-				float2 uv_BaseColorMap = packedInput.ase_texcoord7.xy * _BaseColorMap_ST.xy + _BaseColorMap_ST.zw;
-				float4 tex2DNode11 = tex2D( _BaseColorMap, uv_BaseColorMap );
+				float2 vertexToFrag84 = packedInput.ase_texcoord7.xy;
+				float4 tex2DNode11 = tex2D( _BaseColorMap, vertexToFrag84 );
 				
 				surfaceDescription.Alpha = tex2DNode11.a;
 
@@ -6289,60 +6685,56 @@ Shader "FlockingProcedural"
 }
 /*ASEBEGIN
 Version=19303
-Node;AmplifyShaderEditor.InstanceIdNode;24;-1328,368;Inherit;False;True;0;1;INT;0
-Node;AmplifyShaderEditor.CustomExpressionNode;22;-1104,368;Inherit;False;return _GrassMat[instanceID]@;6;Create;1;True;instanceID;OBJECT;0;In;uint;Inherit;False;GrassInstance;True;False;0;;False;1;0;OBJECT;0;False;1;FLOAT4x4;0
-Node;AmplifyShaderEditor.Vector3Node;37;-1232,784;Inherit;False;Constant;_Vector0;Vector 0;1;0;Create;True;0;0;0;False;0;False;0,0,1;0,0,0;0;4;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3
-Node;AmplifyShaderEditor.NormalVertexDataNode;31;-864,832;Inherit;False;0;5;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
-Node;AmplifyShaderEditor.PosVertexDataNode;30;-1024,480;Inherit;False;0;0;5;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
+Node;AmplifyShaderEditor.VertexIdVariableNode;83;-1872,208;Inherit;False;0;1;INT;0
+Node;AmplifyShaderEditor.InstanceIdNode;24;-1888,320;Inherit;False;False;0;1;INT;0
+Node;AmplifyShaderEditor.CustomExpressionNode;22;-1632,176;Inherit;False;GetGrassInstance(instanceID, vertexID, grassMat, localPosition, localNormal, uv)@;7;File;6;True;vertexID;OBJECT;0;In;uint;Inherit;False;True;instanceID;OBJECT;0;In;uint;Inherit;False;True;grassMat;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;Out;;Inherit;False;True;localPosition;FLOAT3;0,0,0;Out;;Inherit;False;True;localNormal;FLOAT3;0,0,0;Out;;Inherit;False;True;uv;FLOAT2;0,0;Out;;Inherit;False;GetGrassInstance;False;False;0;0acddabae6c4b41408f4a566b4f7d822;False;7;0;FLOAT;0;False;1;OBJECT;0;False;2;OBJECT;0;False;3;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;4;FLOAT3;0,0,0;False;5;FLOAT3;0,0,0;False;6;FLOAT2;0,0;False;5;FLOAT;0;FLOAT4x4;4;FLOAT3;5;FLOAT3;6;FLOAT2;7
+Node;AmplifyShaderEditor.Vector3Node;37;-1232,608;Inherit;False;Constant;_Vector0;Vector 0;1;0;Create;True;0;0;0;False;0;False;0,0,1;0,0,0;0;4;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3
 Node;AmplifyShaderEditor.SimpleMultiplyOpNode;39;-736,688;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;32;-480,544;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
 Node;AmplifyShaderEditor.RangedFloatNode;80;-480,752;Inherit;False;Property;_NormalBlend;NormalBlend;1;0;Create;True;0;0;0;False;0;False;0;0;0;1;0;1;FLOAT;0
-Node;AmplifyShaderEditor.DynamicAppendNode;54;-704,544;Inherit;False;FLOAT4;4;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;FLOAT;1;False;1;FLOAT4;0
-Node;AmplifyShaderEditor.LerpOp;38;-304,544;Inherit;False;3;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;2;FLOAT;0.5;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.TangentVertexDataNode;33;-608,944;Inherit;False;0;0;5;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;34;-304,880;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.TangentVertexDataNode;35;-405.328,1115.538;Inherit;False;1;0;5;FLOAT4;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;17;-352,384;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT4;0,0,0,0;False;1;FLOAT4;0
-Node;AmplifyShaderEditor.DynamicAppendNode;36;-52.08594,883.2106;Inherit;False;FLOAT4;4;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;FLOAT;0;False;1;FLOAT4;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;32;-528,512;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.DynamicAppendNode;54;-800,176;Inherit;False;FLOAT4;4;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;FLOAT;1;False;1;FLOAT4;0
+Node;AmplifyShaderEditor.LerpOp;38;-176,640;Inherit;False;3;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;2;FLOAT;0.5;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.VertexToFragmentNode;84;-416,272;Inherit;False;False;False;1;0;FLOAT2;0,0;False;1;FLOAT2;0
 Node;AmplifyShaderEditor.SamplerNode;11;112,64;Inherit;True;Property;_BaseColorMap;BaseColorMap;0;0;Create;True;0;0;0;False;0;False;-1;ac93f3feddfe1824da6ae203ffbc3cac;ac93f3feddfe1824da6ae203ffbc3cac;True;0;False;white;Auto;False;Object;-1;Auto;Texture2D;8;0;SAMPLER2D;;False;1;FLOAT2;0,0;False;2;FLOAT;0;False;3;FLOAT2;0,0;False;4;FLOAT2;0,0;False;5;FLOAT;1;False;6;FLOAT;0;False;7;SAMPLERSTATE;;False;5;COLOR;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
-Node;AmplifyShaderEditor.NormalizeNode;40;96,560;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.RangedFloatNode;79;208,496;Inherit;False;Constant;_Float1;Float 0;1;0;Create;True;0;0;0;False;0;False;0.5;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.RangedFloatNode;81;176,416;Inherit;False;Constant;_Float2;Float 2;2;0;Create;True;0;0;0;False;0;False;0.25;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.RangedFloatNode;78;192,320;Inherit;False;Constant;_Float0;Float 0;1;0;Create;True;0;0;0;False;0;False;0;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;66;496,304;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;FlockingProcedural;da5c9351d94aedb419f727728916b7d3;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;2;Include;;False;;Native;False;0;0;;Include;Flocking.cginc;False;;Custom;False;0;0;;;0;0;Standard;38;Surface Type;0;638490600732733279;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;0;0;Alpha Clipping;1;638490597184848503;  Use Shadow Threshold;1;638491639855104927;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;1;0;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638490589282398204;0;11;True;True;True;True;True;True;False;False;False;True;True;False;;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;67;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;META;0;1;META;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=Meta;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;68;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;ShadowCaster;0;2;ShadowCaster;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;True;3;False;;False;True;1;LightMode=ShadowCaster;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;69;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;SceneSelectionPass;0;3;SceneSelectionPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=SceneSelectionPass;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;70;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;DepthOnly;0;4;DepthOnly;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;True;True;0;True;_StencilRefDepth;255;False;;255;True;_StencilWriteMaskDepth;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;1;False;;False;False;True;1;LightMode=DepthOnly;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;71;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;MotionVectors;0;5;MotionVectors;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;True;True;0;True;_StencilRefMV;255;False;;255;True;_StencilWriteMaskMV;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;1;False;;False;False;True;1;LightMode=MotionVectors;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;72;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;TransparentBackface;0;6;TransparentBackface;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;True;2;5;False;;10;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;False;False;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelOne;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelTwo;False;False;False;False;False;True;0;True;_ZWrite;True;0;True;_ZTestTransparent;False;True;1;LightMode=TransparentBackface;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;73;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;TransparentDepthPrepass;0;7;TransparentDepthPrepass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;True;1;1;False;;0;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;True;True;0;True;_StencilRefDepth;255;False;;255;True;_StencilWriteMaskDepth;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;1;False;;False;False;True;1;LightMode=TransparentDepthPrepass;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;74;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;TransparentDepthPostpass;0;8;TransparentDepthPostpass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;True;1;1;False;;0;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;False;False;True;1;LightMode=TransparentDepthPostpass;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;75;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;Forward;0;9;Forward;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;True;2;5;False;;10;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;True;0;True;_CullModeForward;False;False;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelOne;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelTwo;False;False;False;True;True;0;True;_StencilRef;255;False;;255;True;_StencilWriteMask;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;0;True;_ZWrite;True;0;True;_ZTestDepthEqualForOpaque;False;True;1;LightMode=Forward;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;76;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;14;New Amplify Shader;da5c9351d94aedb419f727728916b7d3;True;ScenePickingPass;0;10;ScenePickingPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;True;3;False;;False;True;1;LightMode=Picking;False;False;0;;0;0;Standard;0;False;0
-WireConnection;22;0;24;0
-WireConnection;39;0;22;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;17;-560,80;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT4;0,0,0,0;False;1;FLOAT4;0
+Node;AmplifyShaderEditor.NormalizeNode;40;80,704;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.RangedFloatNode;78;224,320;Inherit;False;Constant;_Float0;Float 0;1;0;Create;True;0;0;0;False;0;False;0;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.RangedFloatNode;79;160,592;Inherit;False;Constant;_Float1;Float 0;1;0;Create;True;0;0;0;False;0;False;0.5;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.RangedFloatNode;81;208,400;Inherit;False;Constant;_Float2;Float 2;2;0;Create;True;0;0;0;False;0;False;0.25;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.RangedFloatNode;118;224,512;Inherit;False;Constant;_Float3;Float 2;2;0;Create;True;0;0;0;False;0;False;1;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;107;496,304;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;FlockingProcedural;53b46d85872c5b24c8f4f0a1c3fe4c87;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;0;;0;0;Standard;38;Surface Type;0;0;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;1;638493527226403169;Alpha Clipping;1;638493523555406782;  Use Shadow Threshold;1;638493527239930853;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;1;0;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638493539490901669;0;11;True;True;True;True;True;True;False;False;False;True;True;True;;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;108;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;META;0;1;META;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=Meta;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;109;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;ShadowCaster;0;2;ShadowCaster;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;True;3;False;;False;True;1;LightMode=ShadowCaster;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;110;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;SceneSelectionPass;0;3;SceneSelectionPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=SceneSelectionPass;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;111;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;DepthOnly;0;4;DepthOnly;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;True;True;0;True;_StencilRefDepth;255;False;;255;True;_StencilWriteMaskDepth;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;1;False;;False;False;True;1;LightMode=DepthOnly;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;112;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;MotionVectors;0;5;MotionVectors;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;True;True;0;True;_StencilRefMV;255;False;;255;True;_StencilWriteMaskMV;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;1;False;;False;False;True;1;LightMode=MotionVectors;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;113;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;TransparentBackface;0;6;TransparentBackface;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;True;2;5;False;;10;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;False;False;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelOne;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelTwo;False;False;False;False;False;True;0;True;_ZWrite;True;0;True;_ZTestTransparent;False;True;1;LightMode=TransparentBackface;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;114;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;TransparentDepthPrepass;0;7;TransparentDepthPrepass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;True;1;1;False;;0;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;True;True;0;True;_StencilRefDepth;255;False;;255;True;_StencilWriteMaskDepth;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;1;False;;False;False;True;1;LightMode=TransparentDepthPrepass;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;115;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;TransparentDepthPostpass;0;8;TransparentDepthPostpass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;True;1;1;False;;0;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;False;False;True;1;LightMode=TransparentDepthPostpass;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;116;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;Forward;0;9;Forward;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;True;2;5;False;;10;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;True;0;True;_CullModeForward;False;False;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelOne;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelTwo;False;False;False;True;True;0;True;_StencilRef;255;False;;255;True;_StencilWriteMask;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;0;True;_ZWrite;True;0;True;_ZTestDepthEqualForOpaque;False;True;1;LightMode=Forward;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;117;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;ScenePickingPass;0;10;ScenePickingPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;True;3;False;;False;True;1;LightMode=Picking;False;False;0;;0;0;Standard;0;False;0
+WireConnection;22;1;83;0
+WireConnection;22;2;24;0
+WireConnection;39;0;22;4
 WireConnection;39;1;37;0
-WireConnection;32;0;22;0
-WireConnection;32;1;31;0
-WireConnection;54;0;30;0
+WireConnection;32;0;22;4
+WireConnection;32;1;22;6
+WireConnection;54;0;22;5
 WireConnection;38;0;32;0
 WireConnection;38;1;39;0
 WireConnection;38;2;80;0
-WireConnection;34;0;22;0
-WireConnection;34;1;33;0
-WireConnection;17;0;22;0
+WireConnection;84;0;22;7
+WireConnection;11;1;84;0
+WireConnection;17;0;22;4
 WireConnection;17;1;54;0
-WireConnection;36;0;34;0
-WireConnection;36;3;35;4
 WireConnection;40;0;38;0
-WireConnection;66;0;11;0
-WireConnection;66;4;78;0
-WireConnection;66;7;81;0
-WireConnection;66;9;11;4
-WireConnection;66;10;79;0
-WireConnection;66;30;79;0
-WireConnection;66;11;17;0
-WireConnection;66;12;40;0
+WireConnection;107;0;11;0
+WireConnection;107;4;78;0
+WireConnection;107;7;81;0
+WireConnection;107;8;118;0
+WireConnection;107;9;11;4
+WireConnection;107;10;79;0
+WireConnection;107;11;17;0
+WireConnection;107;12;40;0
 ASEEND*/
-//CHKSM=B08A04CBE09D77666D3375A9195494FD40160186
+//CHKSM=9DAE16C70CDE625230D36F03D7A5AE09AE4C1329
