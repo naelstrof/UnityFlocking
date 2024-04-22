@@ -10,7 +10,7 @@ using UnityEditor;
 [ExecuteAlways]
 public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
     [SerializeField] List<FlockingChunk> chunks;
-    [SerializeField] private Mesh grassMesh;
+    [SerializeField] private List<Mesh> grassMeshes;
     [SerializeField] private Material grassMaterial;
 
     private static FlockingData instance;
@@ -69,7 +69,7 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
 
         newChunk.SetBoundRanges(flooredChunk*CHUNK_SIZE, nextChunk*CHUNK_SIZE);
         newChunk.SetMaterial(grassMaterial);
-        newChunk.SetMesh(grassMesh);
+        newChunk.SetMeshes(grassMeshes);
         chunks.Add(newChunk);
         return newChunk;
     }
@@ -129,14 +129,22 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         //instance.Update();
     }
     #endif
+    public static int GetIndexCount() => instance.grassMeshes?.Count ?? 0;
     public static void RemovePoint(Vector3 point) {
         instance.GetChunk(point).RemovePoint(point);
     }
-    //private void OnDrawGizmos() {
-        //foreach (var pair in quantizedPoints) {
-            //Gizmos.DrawWireCube(pair.Value.position, Vector3.one * 0.1f);
+    public static void SetPointIndex(Vector3 point, int index) {
+        instance.GetChunk(point).SetPointIndex(point, index);
+    }
+    private void OnDrawGizmos() {
+        if (chunks == null) {
+            return;
+        }
+
+        //foreach (var chunk in chunks) {
+            //chunk.OnDrawGizmos();
         //}
-    //}
+    }
 
     public void OnBeforeSerialize() {
     }

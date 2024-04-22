@@ -6,8 +6,9 @@ using UnityEngine.Rendering;
 
 [Serializable]
 public class FlockingChunk {
-    [SerializeField] private Mesh grassMesh;
+    [SerializeField] private List<Mesh> meshes;
     [SerializeField] private Material grassMaterial;
+    
     [SerializeField] private List<GrassData> data;
     
     [SerializeField] private Vector3 minBoundedRange;
@@ -15,24 +16,36 @@ public class FlockingChunk {
 
     [Serializable]
     private struct GrassData {
+        public int index;
         public Vector3 position;
         public Quaternion rotation;
         public Vector3 offset;
         public float scale;
     }
 
+    private struct FoliageChunk {
+        public Matrix4x4 matrix;
+        public int meshIndex;
+    }
+
     private Dictionary<QuantizedVector3, GrassData> quantizedPoints;
     private BoundedRange[] boundedRanges;
-    private Matrix4x4[] cachedMatricies;
+    private FoliageChunk[] cachedMatricies;
     
     private static List<GrassData> cachedPoints;
     public const int MAX_SUBDIV = 3;
     public const float MAX_DIVISOR = (1<<MAX_SUBDIV);
     public const float MAX_TOLERANCE = 1f/MAX_DIVISOR;
     
-    private GraphicsBuffer modelMatricies;
+    private GraphicsBuffer meshTriangles;
+    private GraphicsBuffer meshPositions;
+    private GraphicsBuffer meshNormals;
+    private GraphicsBuffer meshUVs;
+    
+    private GraphicsBuffer foliageChunks;
+    private MaterialPropertyBlock materialPropertyBlock;
+    
     private RenderParams renderParams;
-    private MaterialPropertyBlock materialProperties;
     private LightProbeProxyVolume lightProbeVolume;
     
     public void OnEnable() {
@@ -42,16 +55,79 @@ public class FlockingChunk {
             new BoundedRange(minBoundedRange.z, maxBoundedRange.z, MAX_TOLERANCE)
         };
         OnAfterDeserialize();
+        SetMeshes(meshes);
         RegenerateMatricies();
     }
 
     public void OnDisable() {
-        modelMatricies?.Release();
-        modelMatricies = null;
+        foliageChunks?.Release();
+        foliageChunks = null;
     }
 
-    public void SetMesh(Mesh newMesh) {
-        grassMesh = newMesh;
+    public void SetMeshes(ICollection<Mesh> newMeshes) {
+        int? vertexCount = null;
+        foreach (var mesh in newMeshes) {
+            vertexCount ??= (int)mesh.GetIndexCount(0);
+            if (vertexCount.Value != (int)mesh.GetIndexCount(0)) {
+                throw new UnityException("Cannot use meshes with differing triangle counts.");
+            }
+        }
+        meshes = new List<Mesh>(newMeshes);
+        
+        List<int> triangles = new List<int>();
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
+        List<Vector2> uvs = new List<Vector2>();
+
+        List<int> cachedTriangles = new List<int>();
+        List<Vector3> cachedVertices = new List<Vector3>();
+        List<Vector3> cachedNormals = new List<Vector3>();
+        List<Vector2> cachedUvs = new List<Vector2>();
+        foreach (var mesh in meshes) {
+            
+            cachedTriangles.Clear();
+            cachedVertices.Clear();
+            cachedNormals.Clear();
+            cachedUvs.Clear();
+            
+            mesh.GetTriangles(cachedTriangles,0);
+            mesh.GetVertices(cachedVertices);
+            mesh.GetNormals(cachedNormals);
+            mesh.GetUVs(0,cachedUvs);
+            int offset = vertices.Count;
+            for (int i = 0; i < cachedTriangles.Count; i++) {
+                triangles.Add(cachedTriangles[i] + offset);
+            }
+            vertices.AddRange(cachedVertices);
+            uvs.AddRange(cachedUvs);
+            normals.AddRange(cachedNormals);
+        }
+
+        if (triangles.Count == 0) {
+            throw new UnityException("Can't make grass without meshes...");
+        }
+
+        meshTriangles?.Release();
+        meshPositions?.Release();
+        meshNormals?.Release();
+        meshUVs?.Release();
+        
+        meshTriangles = new GraphicsBuffer(GraphicsBuffer.Target.Structured, triangles.Count, sizeof(int));
+        meshPositions = new GraphicsBuffer(GraphicsBuffer.Target.Structured, vertices.Count, sizeof(float)*3);
+        meshNormals = new GraphicsBuffer(GraphicsBuffer.Target.Structured, normals.Count, sizeof(float)*3);
+        meshUVs = new GraphicsBuffer(GraphicsBuffer.Target.Structured, uvs.Count, sizeof(float)*2);
+        
+        meshTriangles.SetData(triangles);
+        meshPositions.SetData(vertices);
+        meshNormals.SetData(normals);
+        meshUVs.SetData(uvs);
+
+        materialPropertyBlock ??= new MaterialPropertyBlock();
+        materialPropertyBlock.SetBuffer("_GrassTriangles", meshTriangles);
+        materialPropertyBlock.SetBuffer("_GrassPositions", meshPositions);
+        materialPropertyBlock.SetBuffer("_GrassNormals", meshNormals);
+        materialPropertyBlock.SetBuffer("_GrassUVs", meshUVs);
+        materialPropertyBlock.SetInt("_GrassIndexCount", (int)meshes[0].GetIndexCount(0));
     }
     public void SetMaterial(Material newMaterial) {
         grassMaterial = newMaterial;
@@ -113,7 +189,9 @@ public class FlockingChunk {
         if (renderParams.matProps == null) {
             return;
         }
-        Graphics.RenderMeshPrimitives(renderParams, grassMesh, 0, quantizedPoints.Count);
+
+        int indexCount = (int)meshes[0].GetIndexCount(0);
+        Graphics.RenderPrimitives(renderParams, MeshTopology.Triangles, indexCount, quantizedPoints.Count);
     }
 
     public void RemovePoint(Vector3 point) {
@@ -130,23 +208,26 @@ public class FlockingChunk {
         if (quantizedPoints.Count == 0) {
             return;
         }
-        if (modelMatricies != null && modelMatricies.count < quantizedPoints.Count) {
-            modelMatricies.Release();
-            modelMatricies = new GraphicsBuffer(GraphicsBuffer.Target.Structured, quantizedPoints.Count*2, sizeof(float) * 16);
-            cachedMatricies = new Matrix4x4[quantizedPoints.Count * 2];
-        } else if (modelMatricies == null || !modelMatricies.IsValid()) {
-            modelMatricies?.Release();
-            modelMatricies = new GraphicsBuffer(GraphicsBuffer.Target.Structured, quantizedPoints.Count, sizeof(float) * 16);
-            cachedMatricies = new Matrix4x4[quantizedPoints.Count];
+        if (foliageChunks != null && foliageChunks.count < quantizedPoints.Count) {
+            foliageChunks.Release();
+            foliageChunks = new GraphicsBuffer(GraphicsBuffer.Target.Structured, quantizedPoints.Count*2, sizeof(float) * 16 + sizeof(int));
+            cachedMatricies = new FoliageChunk[quantizedPoints.Count * 2];
+        } else if (foliageChunks == null || !foliageChunks.IsValid()) {
+            foliageChunks?.Release();
+            foliageChunks = new GraphicsBuffer(GraphicsBuffer.Target.Structured, quantizedPoints.Count, sizeof(float) * 16 + sizeof(int));
+            cachedMatricies = new FoliageChunk[quantizedPoints.Count];
         }
         Vector3 center = Vector3.Lerp(minBoundedRange,maxBoundedRange, 0.5f);
         int i = 0;
         foreach (var pair in quantizedPoints) {
-            Vector3 position = pair.Value.position - center + pair.Value.offset;
-            cachedMatricies[i] = Matrix4x4.TRS(position, pair.Value.rotation, Vector3.one*pair.Value.scale);
+            Vector3 position = pair.Value.position + pair.Value.offset;
+            cachedMatricies[i] = new FoliageChunk() {
+                matrix = Matrix4x4.TRS(position, pair.Value.rotation, Vector3.one*pair.Value.scale),
+                meshIndex = pair.Value.index,
+            };
             i++;
         }
-        modelMatricies.SetData(cachedMatricies);
+        foliageChunks.SetData(cachedMatricies);
         if (lightProbeVolume == null) {
             lightProbeVolume = new GameObject("FlockingLightProbeVolume", typeof(LightProbeProxyVolume)).GetComponent<LightProbeProxyVolume>();
         }
@@ -155,21 +236,21 @@ public class FlockingChunk {
         //lightProbeVolume.sizeCustom = maxBoundedRange - minBoundedRange;
         lightProbeVolume.transform.position = center;
         lightProbeVolume.transform.localScale = maxBoundedRange - minBoundedRange;
-        materialProperties ??= new MaterialPropertyBlock();
+        materialPropertyBlock ??= new MaterialPropertyBlock();
+        materialPropertyBlock.SetBuffer("_GrassMat", foliageChunks);
         renderParams = new RenderParams(grassMaterial) {
             worldBounds = new Bounds(center, Vector3.one+(maxBoundedRange-minBoundedRange)),
             material = grassMaterial,
-            matProps = materialProperties,
+            matProps = materialPropertyBlock,
             lightProbeUsage = LightProbeUsage.UseProxyVolume,
             reflectionProbeUsage = ReflectionProbeUsage.BlendProbes,
             lightProbeProxyVolume = lightProbeVolume,
         };
-        renderParams.matProps.SetBuffer("_GrassMat", modelMatricies);
     }
 
-    private void OnDrawGizmos() {
+    public void OnDrawGizmos() {
         foreach (var pair in quantizedPoints) {
-            Gizmos.DrawWireCube(pair.Value.position, Vector3.one * 0.1f);
+            Gizmos.DrawWireCube(pair.Value.position+pair.Value.offset, Vector3.one * 0.1f);
         }
     }
 
@@ -214,6 +295,16 @@ public class FlockingChunk {
         Quaternion look = Quaternion.LookRotation(up, forward);
         var d= quantizedPoints[quantizedPoint];
         d.rotation = Quaternion.Lerp(d.rotation,look, influence);
+        quantizedPoints[quantizedPoint] = d;
+    }
+
+    public void SetPointIndex(Vector3 point, int index) {
+        var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
+        if (!quantizedPoints.ContainsKey(quantizedPoint)) {
+            return;
+        }
+        var d= quantizedPoints[quantizedPoint];
+        d.index = index;
         quantizedPoints[quantizedPoint] = d;
     }
 }
