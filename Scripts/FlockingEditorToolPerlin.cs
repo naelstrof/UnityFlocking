@@ -30,7 +30,7 @@ public class FlockingEditorToolPerlin : FlockingEditorTool {
         float individualScale = 1f / 4f;
         var noise = simplex.Evaluate(point.x*individualScale, point.y*individualScale, point.z*individualScale);
 
-        int selection = Mathf.RoundToInt(Mathf.Repeat((float)biomeNoise * (float)(totalIndices) + (float)noise * (float)biomeCount, totalIndices - 1));
+        int selection = Mathf.RoundToInt(Mathf.Repeat((float)biomeNoise * (float)(totalIndices)/(float)biomeCount + (float)noise * (float)biomeCount, totalIndices - 1));
         
         int desiredIndex = Mathf.Clamp(selection, 0, totalIndices-1);
         FlockingData.SetPointIndex(point, desiredIndex);
