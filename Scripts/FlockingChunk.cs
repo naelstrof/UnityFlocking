@@ -39,11 +39,6 @@ public class FlockingChunk {
     public const float MAX_DIVISOR = (1<<MAX_SUBDIV);
     public const float MAX_TOLERANCE = 1f/MAX_DIVISOR;
     
-    private GraphicsBuffer meshTriangles;
-    private GraphicsBuffer meshPositions;
-    private GraphicsBuffer meshNormals;
-    private GraphicsBuffer meshUVs;
-    
     private GraphicsBuffer foliageChunks;
     private MaterialPropertyBlock materialPropertyBlock;
     
@@ -66,72 +61,8 @@ public class FlockingChunk {
     }
 
     public void SetFoliagePack(FoliagePack pack) {
-        int? vertexCount = null;
-        foreach (var foliage in pack.foliages) {
-            var mesh = foliage.mesh;
-            vertexCount ??= (int)mesh.GetIndexCount(0);
-            if (vertexCount.Value != (int)mesh.GetIndexCount(0)) {
-                throw new UnityException("Cannot use meshes with differing triangle counts.");
-            }
-        }
-
-        foliagePack = pack;
-        
-        List<int> triangles = new List<int>();
-        List<Vector3> vertices = new List<Vector3>();
-        List<Vector3> normals = new List<Vector3>();
-        List<Vector2> uvs = new List<Vector2>();
-
-        List<int> cachedTriangles = new List<int>();
-        List<Vector3> cachedVertices = new List<Vector3>();
-        List<Vector3> cachedNormals = new List<Vector3>();
-        List<Vector2> cachedUvs = new List<Vector2>();
-        foreach (var foliage in pack.foliages) {
-            var mesh = foliage.mesh;
-            
-            cachedTriangles.Clear();
-            cachedVertices.Clear();
-            cachedNormals.Clear();
-            cachedUvs.Clear();
-            
-            mesh.GetTriangles(cachedTriangles,0);
-            mesh.GetVertices(cachedVertices);
-            mesh.GetNormals(cachedNormals);
-            mesh.GetUVs(0,cachedUvs);
-            int offset = vertices.Count;
-            for (int i = 0; i < cachedTriangles.Count; i++) {
-                triangles.Add(cachedTriangles[i] + offset);
-            }
-            vertices.AddRange(cachedVertices);
-            uvs.AddRange(cachedUvs);
-            normals.AddRange(cachedNormals);
-        }
-
-        if (triangles.Count == 0) {
-            throw new UnityException("Can't make grass without meshes...");
-        }
-
-        meshTriangles?.Release();
-        meshPositions?.Release();
-        meshNormals?.Release();
-        meshUVs?.Release();
-        
-        meshTriangles = new GraphicsBuffer(GraphicsBuffer.Target.Structured, triangles.Count, sizeof(int));
-        meshPositions = new GraphicsBuffer(GraphicsBuffer.Target.Structured, vertices.Count, sizeof(float)*3);
-        meshNormals = new GraphicsBuffer(GraphicsBuffer.Target.Structured, normals.Count, sizeof(float)*3);
-        meshUVs = new GraphicsBuffer(GraphicsBuffer.Target.Structured, uvs.Count, sizeof(float)*2);
-        
-        meshTriangles.SetData(triangles);
-        meshPositions.SetData(vertices);
-        meshNormals.SetData(normals);
-        meshUVs.SetData(uvs);
-
         materialPropertyBlock ??= new MaterialPropertyBlock();
-        materialPropertyBlock.SetBuffer("_GrassTriangles", meshTriangles);
-        materialPropertyBlock.SetBuffer("_GrassPositions", meshPositions);
-        materialPropertyBlock.SetBuffer("_GrassNormals", meshNormals);
-        materialPropertyBlock.SetBuffer("_GrassUVs", meshUVs);
-        materialPropertyBlock.SetInt("_GrassIndexCount", (int)foliagePack.foliages[0].mesh.GetIndexCount(0));
+        pack.SetBuffers(materialPropertyBlock);
     }
     public bool ContainsPoint(Vector3 check) {
         return check.x >= minBoundedRange.x && check.x <= maxBoundedRange.x &&
@@ -176,7 +107,7 @@ public class FlockingChunk {
             rotation = Quaternion.FromToRotation(Vector3.forward, normal) * Quaternion.AngleAxis(rotation, Vector3.forward),
             scale = scale.magnitude,
             offset = offset,
-            index = index % foliagePack.foliages.Count,
+            index = index % foliagePack.GetFoliageCount(),
         };
         if (shouldRender) {
             RegenerateMatricies();
@@ -192,7 +123,7 @@ public class FlockingChunk {
             return;
         }
 
-        int indexCount = (int)foliagePack.foliages[0].mesh.GetIndexCount(0);
+        int indexCount = foliagePack.GetFoliageTriangleIndexCount();
         Graphics.RenderPrimitives(renderParams, MeshTopology.Triangles, indexCount, quantizedPoints.Count);
     }
 
@@ -240,9 +171,9 @@ public class FlockingChunk {
         lightProbeVolume.transform.localScale = maxBoundedRange - minBoundedRange;
         materialPropertyBlock ??= new MaterialPropertyBlock();
         materialPropertyBlock.SetBuffer("_GrassMat", foliageChunks);
-        renderParams = new RenderParams(foliagePack.material) {
+        renderParams = new RenderParams(foliagePack.GetMaterial()) {
             worldBounds = new Bounds(center, Vector3.one+(maxBoundedRange-minBoundedRange)),
-            material = foliagePack.material,
+            material = foliagePack.GetMaterial(),
             matProps = materialPropertyBlock,
             lightProbeUsage = LightProbeUsage.UseProxyVolume,
             reflectionProbeUsage = ReflectionProbeUsage.BlendProbes,
