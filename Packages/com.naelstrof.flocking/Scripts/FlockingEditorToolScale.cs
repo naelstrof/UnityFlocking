@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.EditorTools;
@@ -9,12 +10,14 @@ using UnityEditor.EditorTools;
 public class FlockingEditorToolScale : FlockingEditorTool {
     [SerializeField, Range(0f,3f)]
     private float offsetVariation = 1f;
+    [SerializeField] private int foliageIndex = 0;
     
     private float scaleSum;
     private int pointCount;
     protected override void DrawWindow(int id) {
         base.DrawWindow(id);
         EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(offsetVariation)), true);
+        EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(foliageIndex)), true);
         serializedObject.ApplyModifiedProperties();
     }
 
@@ -42,7 +45,7 @@ public class FlockingEditorToolScale : FlockingEditorTool {
             if (startScale == null && !data.ctrlHeld) {
                 Vector3 offset = realSurface.ClosestPointOnPlane(point)-point;
                 offset += Vector3.ProjectOnPlane(Random.insideUnitSphere*offsetVariation,realSurface.normal)*FlockingChunk.MAX_TOLERANCE;
-                FlockingData.AddPoint(point, normal, Vector3.zero, offset, Random.Range(0f,360f));
+                FlockingData.AddPoint(point, normal, Vector3.zero, offset, Random.Range(0f,360f), foliageIndex);
             }
 
             float newScale = (startScale ?? Vector3.zero).x + (data.ctrlHeld ? -data.mouseDelta.magnitude * 0.004f : data.mouseDelta.magnitude * 0.004f) * falloff;
@@ -55,7 +58,7 @@ public class FlockingEditorToolScale : FlockingEditorTool {
             if (currentScale == null) {
                 Vector3 offset = point - realSurface.ClosestPointOnPlane(point);
                 offset += Vector3.ProjectOnPlane(Random.insideUnitSphere*offsetVariation,realSurface.normal)*FlockingChunk.MAX_TOLERANCE;
-                FlockingData.AddPoint(point, normal, Vector3.zero, offset, Random.Range(0f,360f));
+                FlockingData.AddPoint(point, normal, Vector3.zero, offset, Random.Range(0f,360f), foliageIndex);
                 return;
             }
             float desiredScale = scaleSum / pointCount;

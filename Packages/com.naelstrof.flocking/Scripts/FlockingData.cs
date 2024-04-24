@@ -76,8 +76,8 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
         instance.GetChunk(point).SetScale(point, newScale);
     }
 
-    public static void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, Vector3 offset, float rotation) {
-        instance.GetChunk(point).AddPoint(point, normal, scale, offset, rotation);
+    public static void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, Vector3 offset, float rotation, int index) {
+        instance.GetChunk(point).AddPoint(point, normal, scale, offset, rotation, index);
     }
 
     public static void SetPointRotation(Vector3 point, Vector3 up, Vector3 forward, float influence) {

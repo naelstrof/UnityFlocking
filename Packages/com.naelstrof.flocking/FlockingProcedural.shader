@@ -852,9 +852,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord5.xy = vertexToFrag84;
@@ -869,7 +881,7 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue = WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -877,7 +889,7 @@ Shader "Flocking/ProceduralPrimitive"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS =  inputMesh.tangentOS ;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -1647,9 +1659,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord2.xy = vertexToFrag84;
@@ -1664,7 +1688,7 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue = WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -1672,7 +1696,7 @@ Shader "Flocking/ProceduralPrimitive"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS =  inputMesh.tangentOS ;
 
 				outputPackedVaryingsMeshToPS.positionCS = UnityMetaVertexPosition(inputMesh.positionOS, inputMesh.uv1.xy, inputMesh.uv2.xy, unity_LightmapST, unity_DynamicLightmapST);
@@ -2361,9 +2385,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = vertexToFrag84;
@@ -2378,7 +2414,7 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue = WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -2386,7 +2422,7 @@ Shader "Flocking/ProceduralPrimitive"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -3060,9 +3096,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord1.xy = vertexToFrag84;
@@ -3077,7 +3125,7 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue = WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -3085,7 +3133,7 @@ Shader "Flocking/ProceduralPrimitive"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -3738,9 +3786,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = vertexToFrag84;
@@ -3755,7 +3815,7 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue = WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
@@ -3763,7 +3823,7 @@ Shader "Flocking/ProceduralPrimitive"
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
 
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS =  inputMesh.tangentOS ;
 
 				float3 positionRWS = TransformObjectToWorld(inputMesh.positionOS);
@@ -4465,9 +4525,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord3.xy = vertexToFrag84;
@@ -4482,14 +4554,14 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue = WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
 				#else
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 				return inputMesh;
 			}
@@ -5338,9 +5410,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = vertexToFrag84;
@@ -5355,14 +5439,14 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue = mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue = WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
 				#else
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 				return inputMesh;
 			}
@@ -6132,9 +6216,21 @@ Shader "Flocking/ProceduralPrimitive"
 				float2 uv22 = float2( 0,0 );
 				GetGrassInstance( vertexID22 , instanceID22 , grassMat22 , localPosition22 , localNormal22 , uv22 );
 				float4 appendResult54 = (float4(localPosition22 , 1.0));
+				float3 WorldPosition194 = (mul( grassMat22, appendResult54 )).xyz;
 				
-				float3 lerpResult156 = lerp( mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz , mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz , _NormalBlend);
+				float3 normalizeResult211 = normalize( mul( grassMat22, float4( float3(0,0,1) , 0.0 ) ).xyz );
+				float3 WorldWallNormal197 = normalizeResult211;
+				float3 normalizeResult226 = normalize( ( _WorldSpaceCameraPos - WorldPosition194 ) );
+				float3 EyeDir200 = normalizeResult226;
+				float dotResult222 = dot( WorldWallNormal197 , EyeDir200 );
+				float3 normalizeResult181 = normalize( ( ( WorldWallNormal197 - ( dotResult222 * EyeDir200 ) ) + ( EyeDir200 * 0.25 ) ) );
+				float3 WorldNormal196 = mul( grassMat22, float4( localNormal22 , 0.0 ) ).xyz;
+				float3 lerpResult156 = lerp( WorldNormal196 , WorldWallNormal197 , _NormalBlend);
 				float3 normalizeResult158 = normalize( lerpResult156 );
+				float3 NoisyNormal205 = normalizeResult158;
+				float3 lerpResult164 = lerp( normalizeResult181 , NoisyNormal205 , saturate( ( dotResult222 * 10.0 ) ));
+				float3 normalizeResult172 = normalize( lerpResult164 );
+				float3 ClampedNormal206 = normalizeResult172;
 				
 				float2 vertexToFrag84 = uv22;
 				outputPackedVaryingsMeshToPS.ase_texcoord7.xy = vertexToFrag84;
@@ -6149,14 +6245,14 @@ Shader "Flocking/ProceduralPrimitive"
 				#else
 				float3 defaultVertexValue = float3( 0, 0, 0 );
 				#endif
-				float3 vertexValue =  mul( grassMat22, appendResult54 ).xyz;
+				float3 vertexValue =  WorldPosition194;
 
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 				inputMesh.positionOS.xyz = vertexValue;
 				#else
 				inputMesh.positionOS.xyz += vertexValue;
 				#endif
-				inputMesh.normalOS = normalizeResult158;
+				inputMesh.normalOS = ClampedNormal206;
 				inputMesh.tangentOS = inputMesh.tangentOS;
 				return inputMesh;
 			}
@@ -6677,22 +6773,48 @@ Shader "Flocking/ProceduralPrimitive"
 }
 /*ASEBEGIN
 Version=19303
-Node;AmplifyShaderEditor.VertexIdVariableNode;83;-1536,368;Inherit;False;0;1;INT;0
-Node;AmplifyShaderEditor.InstanceIdNode;24;-1552,480;Inherit;False;False;0;1;INT;0
-Node;AmplifyShaderEditor.CustomExpressionNode;22;-1296,336;Inherit;False;GetGrassInstance(instanceID, vertexID, grassMat, localPosition, localNormal, uv)@;7;File;6;True;vertexID;OBJECT;0;In;uint;Inherit;False;True;instanceID;OBJECT;0;In;uint;Inherit;False;True;grassMat;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;Out;;Inherit;False;True;localPosition;FLOAT3;0,0,0;Out;;Inherit;False;True;localNormal;FLOAT3;0,0,0;Out;;Inherit;False;True;uv;FLOAT2;0,0;Out;;Inherit;False;GetGrassInstance;False;False;0;0acddabae6c4b41408f4a566b4f7d822;False;7;0;FLOAT;0;False;1;OBJECT;0;False;2;OBJECT;0;False;3;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;4;FLOAT3;0,0,0;False;5;FLOAT3;0,0,0;False;6;FLOAT2;0,0;False;5;FLOAT;0;FLOAT4x4;4;FLOAT3;5;FLOAT3;6;FLOAT2;7
-Node;AmplifyShaderEditor.Vector3Node;37;-1088,896;Inherit;False;Constant;_Vector0;Vector 0;1;0;Create;True;0;0;0;False;0;False;0,0,1;0,0,0;0;4;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3
-Node;AmplifyShaderEditor.RangedFloatNode;80;-576,1056;Inherit;False;Property;_NormalBlend;NormalBlend;1;0;Create;True;0;0;0;False;0;False;0;0;0;1;0;1;FLOAT;0
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;32;-560,688;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;39;-832,864;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.LerpOp;156;-176,864;Inherit;False;3;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;2;FLOAT;0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.DynamicAppendNode;54;-864,272;Inherit;False;FLOAT4;4;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;FLOAT;1;False;1;FLOAT4;0
-Node;AmplifyShaderEditor.VertexToFragmentNode;84;-592,368;Inherit;False;False;False;1;0;FLOAT2;0,0;False;1;FLOAT2;0
-Node;AmplifyShaderEditor.SamplerNode;11;112,64;Inherit;True;Property;_BaseColorMap;BaseColorMap;0;0;Create;True;0;0;0;False;0;False;-1;ac93f3feddfe1824da6ae203ffbc3cac;ac93f3feddfe1824da6ae203ffbc3cac;True;0;False;white;Auto;False;Object;-1;Auto;Texture2D;8;0;SAMPLER2D;;False;1;FLOAT2;0,0;False;2;FLOAT;0;False;3;FLOAT2;0,0;False;4;FLOAT2;0,0;False;5;FLOAT;1;False;6;FLOAT;0;False;7;SAMPLERSTATE;;False;5;COLOR;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
-Node;AmplifyShaderEditor.RangedFloatNode;78;112,384;Inherit;False;Constant;_Float0;Float 0;1;0;Create;True;0;0;0;False;0;False;0;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.RangedFloatNode;157;-32,480;Inherit;False;Property;_Smoothness;Smoothness;2;0;Create;True;0;0;0;False;0;False;0.25;0.25;0;1;0;1;FLOAT;0
-Node;AmplifyShaderEditor.NormalizeNode;158;32,688;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
-Node;AmplifyShaderEditor.SimpleMultiplyOpNode;17;-640,192;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT4;0,0,0,0;False;1;FLOAT4;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;107;496,304;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;Flocking/ProceduralPrimitive;53b46d85872c5b24c8f4f0a1c3fe4c87;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;0;;0;0;Standard;38;Surface Type;0;0;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;1;638493527226403169;Alpha Clipping;1;638493523555406782;  Use Shadow Threshold;1;638493527239930853;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;0;638494125464315197;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638493539490901669;0;11;True;True;True;True;True;True;False;False;False;True;True;True;;False;0
+Node;AmplifyShaderEditor.VertexIdVariableNode;83;-1792,384;Inherit;False;0;1;INT;0
+Node;AmplifyShaderEditor.InstanceIdNode;24;-1808,496;Inherit;False;False;0;1;INT;0
+Node;AmplifyShaderEditor.CustomExpressionNode;22;-1552,352;Inherit;False;GetGrassInstance(instanceID, vertexID, grassMat, localPosition, localNormal, uv)@;7;File;6;True;vertexID;OBJECT;0;In;uint;Inherit;False;True;instanceID;OBJECT;0;In;uint;Inherit;False;True;grassMat;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;Out;;Inherit;False;True;localPosition;FLOAT3;0,0,0;Out;;Inherit;False;True;localNormal;FLOAT3;0,0,0;Out;;Inherit;False;True;uv;FLOAT2;0,0;Out;;Inherit;False;GetGrassInstance;False;False;0;0acddabae6c4b41408f4a566b4f7d822;False;7;0;FLOAT;0;False;1;OBJECT;0;False;2;OBJECT;0;False;3;FLOAT4x4;1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;4;FLOAT3;0,0,0;False;5;FLOAT3;0,0,0;False;6;FLOAT2;0,0;False;5;FLOAT;0;FLOAT4x4;4;FLOAT3;5;FLOAT3;6;FLOAT2;7
+Node;AmplifyShaderEditor.DynamicAppendNode;54;-1248,112;Inherit;False;FLOAT4;4;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;FLOAT;1;False;1;FLOAT4;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;17;-1056,96;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT4;0,0,0,0;False;1;FLOAT4;0
+Node;AmplifyShaderEditor.SwizzleNode;185;-896,96;Inherit;False;FLOAT3;0;1;2;3;1;0;FLOAT4;0,0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.RegisterLocalVarNode;194;-736,96;Inherit;False;WorldPosition;-1;True;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.Vector3Node;37;-1472,592;Inherit;False;Constant;_Vector0;Vector 0;1;0;Create;True;0;0;0;False;0;False;0,0,1;0,0,0;0;4;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3
+Node;AmplifyShaderEditor.WorldSpaceCameraPos;225;-1456,1136;Inherit;False;0;4;FLOAT3;0;FLOAT;1;FLOAT;2;FLOAT;3
+Node;AmplifyShaderEditor.GetLocalVarNode;223;-1456,1328;Inherit;False;194;WorldPosition;1;0;OBJECT;;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;39;-1232,608;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleSubtractOpNode;224;-1072,1184;Inherit;False;2;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.NormalizeNode;211;-1040,656;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.NormalizeNode;226;-912,1184;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.CommentaryNode;208;-466,1006;Inherit;False;1540;739;ClampNormal for walls facing away.;13;181;162;192;180;178;164;201;199;203;204;172;210;222;;1,1,1,1;0;0
+Node;AmplifyShaderEditor.RegisterLocalVarNode;197;-848,688;Inherit;False;WorldWallNormal;-1;True;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.RegisterLocalVarNode;200;-736,1200;Inherit;False;EyeDir;-1;True;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.GetLocalVarNode;210;-448,1072;Inherit;False;197;WorldWallNormal;1;0;OBJECT;;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.GetLocalVarNode;201;-448,1408;Inherit;False;200;EyeDir;1;0;OBJECT;;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;32;-1152,256;Inherit;False;2;2;0;FLOAT4x4;0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.DotProductOpNode;222;-208,1264;Inherit;False;2;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;1;FLOAT;0
+Node;AmplifyShaderEditor.RangedFloatNode;80;-1072,944;Inherit;False;Property;_NormalBlend;NormalBlend;1;0;Create;True;0;0;0;False;0;False;0;0;0;1;0;1;FLOAT;0
+Node;AmplifyShaderEditor.RegisterLocalVarNode;196;-976,256;Inherit;False;WorldNormal;-1;True;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;178;-48,1392;Inherit;False;2;2;0;FLOAT;0;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.RangedFloatNode;204;-304,1632;Inherit;False;Constant;_Float2;Float 1;3;0;Create;True;0;0;0;False;0;False;0.25;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.LerpOp;156;-576,704;Inherit;False;3;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;2;FLOAT;0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleSubtractOpNode;180;192,1328;Inherit;False;2;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;203;80,1568;Inherit;False;2;2;0;FLOAT3;0,0,0;False;1;FLOAT;0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.NormalizeNode;158;-384,704;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SimpleMultiplyOpNode;192;16,1056;Inherit;False;2;2;0;FLOAT;0;False;1;FLOAT;10;False;1;FLOAT;0
+Node;AmplifyShaderEditor.SimpleAddOpNode;199;416,1504;Inherit;False;2;2;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.RegisterLocalVarNode;205;-208,704;Inherit;False;NoisyNormal;-1;True;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.NormalizeNode;181;528,1328;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SaturateNode;162;240,1168;Inherit;False;1;0;FLOAT;0;False;1;FLOAT;0
+Node;AmplifyShaderEditor.LerpOp;164;704,1072;Inherit;False;3;0;FLOAT3;0,0,0;False;1;FLOAT3;0,0,0;False;2;FLOAT;0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.VertexToFragmentNode;84;-256,112;Inherit;False;False;False;1;0;FLOAT2;0,0;False;1;FLOAT2;0
+Node;AmplifyShaderEditor.NormalizeNode;172;896,1056;Inherit;False;False;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.RangedFloatNode;78;624,336;Inherit;False;Constant;_Float0;Float 0;1;0;Create;True;0;0;0;False;0;False;0;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.RangedFloatNode;157;480,432;Inherit;False;Property;_Smoothness;Smoothness;2;0;Create;True;0;0;0;False;0;False;0.25;0.25;0;1;0;1;FLOAT;0
+Node;AmplifyShaderEditor.GetLocalVarNode;195;928,656;Inherit;False;194;WorldPosition;1;0;OBJECT;;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.RegisterLocalVarNode;206;1120,1056;Inherit;False;ClampedNormal;-1;True;1;0;FLOAT3;0,0,0;False;1;FLOAT3;0
+Node;AmplifyShaderEditor.SamplerNode;11;640,64;Inherit;True;Property;_BaseColorMap;BaseColorMap;0;0;Create;True;0;0;0;False;0;False;-1;ac93f3feddfe1824da6ae203ffbc3cac;ac93f3feddfe1824da6ae203ffbc3cac;True;0;False;white;Auto;False;Object;-1;Auto;Texture2D;8;0;SAMPLER2D;;False;1;FLOAT2;0,0;False;2;FLOAT;0;False;3;FLOAT2;0,0;False;4;FLOAT2;0,0;False;5;FLOAT;1;False;6;FLOAT;0;False;7;SAMPLERSTATE;;False;5;COLOR;0;FLOAT;1;FLOAT;2;FLOAT;3;FLOAT;4
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;108;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;META;0;1;META;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=Meta;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;109;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;ShadowCaster;0;2;ShadowCaster;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;True;3;False;;False;True;1;LightMode=ShadowCaster;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;110;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;SceneSelectionPass;0;3;SceneSelectionPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=SceneSelectionPass;False;False;0;;0;0;Standard;0;False;0
@@ -6703,26 +6825,55 @@ Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;114;496,304;Float;False;Fal
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;115;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;TransparentDepthPostpass;0;8;TransparentDepthPostpass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;True;1;1;False;;0;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;False;False;True;1;LightMode=TransparentDepthPostpass;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;116;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;Forward;0;9;Forward;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;True;2;5;False;;10;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;True;0;True;_CullModeForward;False;False;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelOne;False;True;True;True;True;True;0;True;_ColorMaskTransparentVelTwo;False;False;False;True;True;0;True;_StencilRef;255;False;;255;True;_StencilWriteMask;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;True;0;True;_ZWrite;True;0;True;_ZTestDepthEqualForOpaque;False;True;1;LightMode=Forward;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;117;496,304;Float;False;False;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;New Amplify Shader;53b46d85872c5b24c8f4f0a1c3fe4c87;True;ScenePickingPass;0;10;ScenePickingPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;True;3;False;;False;True;1;LightMode=Picking;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode;107;1248,416;Float;False;True;-1;2;Rendering.HighDefinition.LightingShaderGraphGUI;0;12;Flocking/ProceduralPrimitive;53b46d85872c5b24c8f4f0a1c3fe4c87;True;GBuffer;0;0;GBuffer;34;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=HDRenderPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;True;5;True;7;d3d11;metal;vulkan;xboxone;xboxseries;playstation;switch;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;0;True;_CullMode;False;True;True;True;True;True;0;True;_LightLayersMaskBuffer4;False;False;False;False;False;False;False;True;True;0;True;_StencilRefGBuffer;255;False;;255;True;_StencilWriteMaskGBuffer;7;False;;3;False;;0;False;;0;False;;7;False;;3;False;;0;False;;0;False;;False;False;True;0;True;_ZTestGBuffer;False;True;1;LightMode=GBuffer;False;False;0;;0;0;Standard;38;Surface Type;0;0;  Rendering Pass;1;0;  Refraction Model;0;0;    Blending Mode;0;0;    Blend Preserves Specular;1;0;  Back Then Front Rendering;0;0;  Transparent Depth Prepass;0;0;  Transparent Depth Postpass;0;0;  ZWrite;0;0;  Z Test;4;0;Double-Sided;1;638493527226403169;Alpha Clipping;1;638493523555406782;  Use Shadow Threshold;1;638493527239930853;Material Type,InvertActionOnDeselection;0;0;  Energy Conserving Specular;1;0;  Transmission,InvertActionOnDeselection;0;0;Receive Decals;1;0;Receive SSR;1;0;Receive SSR Transparent;0;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;Specular AA;0;0;Specular Occlusion Mode;1;0;Override Baked GI;0;0;Depth Offset;0;0;  Conserative;1;0;GPU Instancing;0;638494125464315197;LOD CrossFade;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,False,;0;  Type;0;0;  Tess;16,False,;0;  Min;10,False,;0;  Max;25,False,;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Vertex Position;0;638493539490901669;0;11;True;True;True;True;True;True;False;False;False;True;True;True;;False;0
 WireConnection;22;1;83;0
 WireConnection;22;2;24;0
-WireConnection;32;0;22;4
-WireConnection;32;1;22;6
-WireConnection;39;0;22;4
-WireConnection;39;1;37;0
-WireConnection;156;0;32;0
-WireConnection;156;1;39;0
-WireConnection;156;2;80;0
 WireConnection;54;0;22;5
-WireConnection;84;0;22;7
-WireConnection;11;1;84;0
-WireConnection;158;0;156;0
 WireConnection;17;0;22;4
 WireConnection;17;1;54;0
+WireConnection;185;0;17;0
+WireConnection;194;0;185;0
+WireConnection;39;0;22;4
+WireConnection;39;1;37;0
+WireConnection;224;0;225;0
+WireConnection;224;1;223;0
+WireConnection;211;0;39;0
+WireConnection;226;0;224;0
+WireConnection;197;0;211;0
+WireConnection;200;0;226;0
+WireConnection;32;0;22;4
+WireConnection;32;1;22;6
+WireConnection;222;0;210;0
+WireConnection;222;1;201;0
+WireConnection;196;0;32;0
+WireConnection;178;0;222;0
+WireConnection;178;1;201;0
+WireConnection;156;0;196;0
+WireConnection;156;1;197;0
+WireConnection;156;2;80;0
+WireConnection;180;0;210;0
+WireConnection;180;1;178;0
+WireConnection;203;0;201;0
+WireConnection;203;1;204;0
+WireConnection;158;0;156;0
+WireConnection;192;0;222;0
+WireConnection;199;0;180;0
+WireConnection;199;1;203;0
+WireConnection;205;0;158;0
+WireConnection;181;0;199;0
+WireConnection;162;0;192;0
+WireConnection;164;0;181;0
+WireConnection;164;1;205;0
+WireConnection;164;2;162;0
+WireConnection;84;0;22;7
+WireConnection;172;0;164;0
+WireConnection;206;0;172;0
+WireConnection;11;1;84;0
 WireConnection;107;0;11;0
 WireConnection;107;4;78;0
 WireConnection;107;7;157;0
 WireConnection;107;9;11;4
-WireConnection;107;11;17;0
-WireConnection;107;12;158;0
+WireConnection;107;11;195;0
+WireConnection;107;12;206;0
 ASEEND*/
-//CHKSM=C5A001785771BBD5CA812FD27564A5B674A24AFC
+//CHKSM=96F99CF184072881A21B667ED53CAC0B030CF561
