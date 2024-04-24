@@ -8,6 +8,8 @@ using UnityEngine.Rendering;
 public class FlockingChunk {
     [SerializeField]
     private FoliagePack foliagePack;
+
+    [SerializeField] private LightProbeProxyVolume lightProbeVolume;
     
     [SerializeField] private List<CPUFoliage> data;
     
@@ -46,7 +48,6 @@ public class FlockingChunk {
     private MaterialPropertyBlock materialPropertyBlock;
     
     private RenderParams renderParams;
-    private LightProbeProxyVolume lightProbeVolume;
     
     public void OnEnable() {
         boundedRanges = new[] {
@@ -167,7 +168,7 @@ public class FlockingChunk {
         quantizedPoints[quantizedPoint] = d;
     }
 
-    public void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, Vector3 offset, float rotation) {
+    public void AddPoint(Vector3 point, Vector3 normal, Vector3 scale, Vector3 offset, float rotation, int index) {
         var quantizedPoint = BoundedRange.Quantize(point, boundedRanges);
         bool shouldRender = !quantizedPoints.ContainsKey(quantizedPoint);
         quantizedPoints[quantizedPoint] = new CPUFoliage {
@@ -175,6 +176,7 @@ public class FlockingChunk {
             rotation = Quaternion.FromToRotation(Vector3.forward, normal) * Quaternion.AngleAxis(rotation, Vector3.forward),
             scale = scale.magnitude,
             offset = offset,
+            index = index % foliagePack.foliages.Count,
         };
         if (shouldRender) {
             RegenerateMatricies();
