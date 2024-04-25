@@ -30,7 +30,7 @@ public class FlockingChunk {
         public int meshIndex;
     }
 
-    private Dictionary<QuantizedVector3, CPUFoliage> quantizedPoints;
+    private Dictionary<QuantizedVector3, CPUFoliage> quantizedPoints = new Dictionary<QuantizedVector3, CPUFoliage>();
     private BoundedRange[] boundedRanges;
     private GPUFoliage[] cachedMatricies;
     
@@ -51,7 +51,9 @@ public class FlockingChunk {
             new BoundedRange(minBoundedRange.z, maxBoundedRange.z, MAX_TOLERANCE)
         };
         OnAfterDeserialize();
-        SetFoliagePack(foliagePack);
+        if (foliagePack != null) {
+            SetFoliagePack(foliagePack);
+        }
         RegenerateMatricies();
     }
 
@@ -62,6 +64,7 @@ public class FlockingChunk {
 
     public void SetFoliagePack(FoliagePack pack) {
         materialPropertyBlock ??= new MaterialPropertyBlock();
+        foliagePack = pack;
         pack.SetBuffers(materialPropertyBlock);
     }
     public bool ContainsPoint(Vector3 check) {
@@ -83,7 +86,6 @@ public class FlockingChunk {
         if (data != null) {
             cachedPoints.AddRange(data);
         }
-        quantizedPoints ??= new Dictionary<QuantizedVector3, CPUFoliage>();
         quantizedPoints.Clear();
         foreach (var d in cachedPoints) {
             quantizedPoints[BoundedRange.Quantize(d.position, boundedRanges)] = d;
@@ -207,8 +209,10 @@ public class FlockingChunk {
             new BoundedRange(minBoundedRange.y, maxBoundedRange.y, MAX_TOLERANCE),
             new BoundedRange(minBoundedRange.z, maxBoundedRange.z, MAX_TOLERANCE)
         };
-        foreach (var d in data) {
-            quantizedPoints[BoundedRange.Quantize(d.position, boundedRanges)] = d;
+        if (data != null) {
+            foreach (var d in data) {
+                quantizedPoints[BoundedRange.Quantize(d.position, boundedRanges)] = d;
+            }
         }
     }
 
