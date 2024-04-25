@@ -19,8 +19,10 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
     private void OnEnable() {
         if (instance == null || instance == this) {
             instance = this;
-            foreach (var chunk in chunks) {
-                chunk.OnEnable();
+            if (chunks != null) {
+                foreach (var chunk in chunks) {
+                    chunk.OnEnable();
+                }
             }
         } else {
             if (Application.isPlaying) {
@@ -51,12 +53,16 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
 #endif
     }
     private void Update() {
+        if (chunks == null) {
+            return;
+        }
         foreach (var chunk in chunks) {
             chunk.Render();
         }
     }
 
     private FlockingChunk GetChunk(Vector3 point) {
+        chunks ??= new List<FlockingChunk>();
         foreach (var chunk in chunks) {
             if (chunk.ContainsPoint(point)) {
                 return chunk;
@@ -119,9 +125,12 @@ public class FlockingData : MonoBehaviour, ISerializationCallbackReceiver {
             throw new Exception("Tried to end change without starting it! This shouldn't happen.");
         }
         Undo.RecordObject(instance, "Flocking change");
-        foreach (var chunk in instance.chunks) {
-            chunk.OnBeforeSerialize();
+        if (instance.chunks != null) {
+            foreach (var chunk in instance.chunks) {
+                chunk.OnBeforeSerialize();
+            }
         }
+
         EditorUtility.SetDirty(instance);
         Undo.CollapseUndoOperations(undoGroup);
         undoGroup = -1;
